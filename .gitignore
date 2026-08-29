@@ -1,0 +1,14 @@
+
+
+.env
+*.env
+-firebase-adminsdk-.json
+credentials.json
+serviceAccountKey.json
+
+.venv/
+venv/
+_pycache_/
+*.pyc
+
+.idea/
