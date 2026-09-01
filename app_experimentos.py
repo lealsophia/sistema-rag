@@ -631,16 +631,28 @@ def buscar_chat(
     embeddings_chunks,
     modelo,
     top_k=5,
-    top_candidatos=30
+    top_candidatos=30,
+    candidatos_por_area=2
 ):
     """
     Busca otimizada para o chatbot.
 
-    1. Faz a busca semântica.
-    2. Recupera um conjunto maior de candidatos.
-    3. Identifica disciplina e campo mencionados na pergunta.
-    4. Faz reranking dos candidatos.
-    5. Retorna apenas o Top-K final.
+    Fluxo:
+    1. Busca semântica.
+    2. Recupera candidatos gerais.
+    3. Identifica componentes explícitos.
+    4. Identifica campo solicitado.
+    5. Identifica áreas mencionadas.
+    6. Faz reranking normal.
+    7. Em perguntas interdisciplinares:
+       - adiciona até N candidatos relevantes por área;
+       - prioriza o campo solicitado;
+       - garante cobertura das áreas.
+    8. Retorna Top-K final.
+
+    IMPORTANTE:
+    Esta função é exclusiva do chatbot.
+    A função buscar() dos experimentos permanece inalterada.
     """
 
     # ==========================================
@@ -657,8 +669,14 @@ def buscar_chat(
         embeddings_chunks
     )[0]
 
+    pergunta_normalizada = normalizar_busca(pergunta)
+
+    # Base completa com score semântico
+    base_com_scores = df_chunks.copy()
+    base_com_scores["similaridade"] = similaridades
+
     # ==========================================
-    # 2. RECUPERA MAIS CANDIDATOS
+    # 2. CANDIDATOS GERAIS
     # ==========================================
 
     quantidade_candidatos = min(
@@ -671,14 +689,11 @@ def buscar_chat(
     ]
 
     candidatos = df_chunks.iloc[ordem].copy()
-
     candidatos["similaridade"] = similaridades[ordem]
 
     # ==========================================
-    # 3. IDENTIFICA DISCIPLINA NA PERGUNTA
+    # 3. COMPONENTES EXPLICITAMENTE CITADOS
     # ==========================================
-
-    pergunta_normalizada = normalizar_busca(pergunta)
 
     componentes = (
         df_chunks["Componente"]
@@ -687,55 +702,95 @@ def buscar_chat(
         .tolist()
     )
 
-    componente_identificado = None
-
-    # Ordena do maior nome para o menor.
-    # Evita que nomes menores sejam encontrados
-    # antes de nomes mais específicos.
     componentes = sorted(
         componentes,
         key=lambda x: len(str(x)),
         reverse=True
     )
 
+    componentes_identificados = []
+
     for componente in componentes:
 
         componente_norm = normalizar_busca(componente)
 
         if componente_norm in pergunta_normalizada:
-            componente_identificado = componente
-            break
+            componentes_identificados.append(componente)
 
     # ==========================================
-    # 4. IDENTIFICA CAMPO NA PERGUNTA
+    # 4. CAMPO SOLICITADO
     # ==========================================
 
     campos_possiveis = {
-        "ementa": "Ementa",
-        "objetivo": "Objetivos",
-        "objetivos": "Objetivos",
-        "conteúdo": "Conteudo",
-        "conteudo": "Conteudo",
-        "conhecimentos": "Conhecimentos",
-        "conhecimento": "Conhecimentos",
-        "bibliografia básica": "Bibliografia_Basica",
-        "bibliografia basica": "Bibliografia_Basica",
-        "bibliografia complementar": "Bibliografia_Complementar",
-        "áreas de integração": "Areas_integracao",
-        "areas de integração": "Areas_integracao",
-        "areas de integracao": "Areas_integracao"
+        "bibliografia complementar":
+            "Bibliografia_Complementar",
+
+        "bibliografia básica":
+            "Bibliografia_Basica",
+
+        "bibliografia basica":
+            "Bibliografia_Basica",
+
+        "áreas de integração":
+            "Areas_integracao",
+
+        "areas de integração":
+            "Areas_integracao",
+
+        "areas de integracao":
+            "Areas_integracao",
+
+        "área de integração":
+            "Areas_integracao",
+
+        "area de integracao":
+            "Areas_integracao",
+
+        "conteúdo programático":
+            "Conteudo",
+
+        "conteudo programatico":
+            "Conteudo",
+
+        "conteúdo":
+            "Conteudo",
+
+        "conteudo":
+            "Conteudo",
+
+        "conhecimentos":
+            "Conhecimentos",
+
+        "conhecimento":
+            "Conhecimentos",
+
+        "objetivos":
+            "Objetivos",
+
+        "objetivo":
+            "Objetivos",
+
+        "ementa":
+            "Ementa"
     }
 
     campo_identificado = None
 
-    for termo, campo in campos_possiveis.items():
+    for termo in sorted(
+        campos_possiveis,
+        key=len,
+        reverse=True
+    ):
 
-        if termo in pergunta_normalizada:
-            campo_identificado = campo
+        if (
+            normalizar_busca(termo)
+            in pergunta_normalizada
+        ):
+            campo_identificado = campos_possiveis[termo]
             break
 
     # ==========================================
-    # 5. IDENTIFICA PERGUNTAS ESTRUTURAIS
+    # 5. PERGUNTAS ESTRUTURAIS
     # ==========================================
 
     termos_estruturais = [
@@ -759,23 +814,158 @@ def buscar_chat(
     ]
 
     if any(
-            termo in pergunta_normalizada
-            for termo in termos_estruturais
+        termo in pergunta_normalizada
+        for termo in termos_estruturais
     ):
         campo_identificado = "Estrutural"
 
     # ==========================================
-    # 6. RERANKING
+    # 6. ÁREAS MENCIONADAS NA PERGUNTA
+    # ==========================================
+
+    areas_possiveis = {
+        "matematica": "matematica",
+        "informatica": "informatica",
+        "geografia": "geografia",
+        "historia": "historia",
+        "biologia": "biologia",
+        "fisica": "fisica",
+        "quimica": "quimica",
+        "portugues": "portugues",
+        "lingua portuguesa": "portugues",
+        "ingles": "ingles",
+        "lingua inglesa": "ingles",
+        "espanhol": "espanhol",
+        "lingua espanhola": "espanhol"
+    }
+
+    areas_identificadas = []
+
+    for termo, area in areas_possiveis.items():
+
+        if (
+            normalizar_busca(termo)
+            in pergunta_normalizada
+        ):
+
+            if area not in areas_identificadas:
+                areas_identificadas.append(area)
+
+    # ==========================================
+    # 7. CLASSIFICA COMPONENTES POR ÁREA
+    # ==========================================
+
+    componentes_por_area = {
+        area: set()
+        for area in set(areas_possiveis.values())
+    }
+
+    chunks_conhecimentos = df_chunks[
+        df_chunks["campo"]
+        .apply(normalizar_busca)
+        == "conhecimentos"
+    ]
+
+    for _, linha in chunks_conhecimentos.iterrows():
+
+        componente = linha["Componente"]
+
+        componente_norm = normalizar_busca(
+            componente
+        )
+
+        texto_norm = normalizar_busca(
+            linha["texto"]
+        )
+
+        # --------------------------
+        # Áreas propedêuticas
+        # --------------------------
+
+        if "matematica" in componente_norm:
+            componentes_por_area[
+                "matematica"
+            ].add(componente)
+
+        if "geografia" in componente_norm:
+            componentes_por_area[
+                "geografia"
+            ].add(componente)
+
+        if "historia" in componente_norm:
+            componentes_por_area[
+                "historia"
+            ].add(componente)
+
+        if "biologia" in componente_norm:
+            componentes_por_area[
+                "biologia"
+            ].add(componente)
+
+        if "fisica" in componente_norm:
+            componentes_por_area[
+                "fisica"
+            ].add(componente)
+
+        if "quimica" in componente_norm:
+            componentes_por_area[
+                "quimica"
+            ].add(componente)
+
+        if (
+            "portugues" in componente_norm
+            or "lingua portuguesa" in componente_norm
+        ):
+            componentes_por_area[
+                "portugues"
+            ].add(componente)
+
+        if (
+            "ingles" in componente_norm
+            or "lingua inglesa" in componente_norm
+        ):
+            componentes_por_area[
+                "ingles"
+            ].add(componente)
+
+        if (
+            "espanhol" in componente_norm
+            or "espanhola" in componente_norm
+        ):
+            componentes_por_area[
+                "espanhol"
+            ].add(componente)
+
+        # --------------------------
+        # Informática
+        # --------------------------
+
+        if (
+            "/informatica" in texto_norm
+            or "informatica/" in texto_norm
+        ):
+            componentes_por_area[
+                "informatica"
+            ].add(componente)
+
+    # ==========================================
+    # 8. RERANKING NORMAL
     # ==========================================
 
     candidatos["bonus_componente"] = 0.0
     candidatos["bonus_campo"] = 0.0
 
-    if componente_identificado is not None:
+    if componentes_identificados:
+
+        componentes_norm = {
+            normalizar_busca(c)
+            for c in componentes_identificados
+        }
+
         mascara_componente = (
-                candidatos["Componente"]
-                .apply(normalizar_busca)
-                == normalizar_busca(componente_identificado)
+            candidatos["Componente"]
+            .apply(normalizar_busca)
+            .isin(componentes_norm)
         )
 
         candidatos.loc[
@@ -784,10 +974,11 @@ def buscar_chat(
         ] = 0.15
 
     if campo_identificado is not None:
+
         mascara_campo = (
-                candidatos["campo"]
-                .apply(normalizar_busca)
-                == normalizar_busca(campo_identificado)
+            candidatos["campo"]
+            .apply(normalizar_busca)
+            == normalizar_busca(campo_identificado)
         )
 
         candidatos.loc[
@@ -795,17 +986,11 @@ def buscar_chat(
             "bonus_campo"
         ] = 0.10
 
-    # Similaridade original continua sendo
-    # a principal informação.
     candidatos["score_final_retrieval"] = (
         candidatos["similaridade"]
         + candidatos["bonus_componente"]
         + candidatos["bonus_campo"]
     )
-
-    # ==========================================
-    # 7. ORDENA PELO SCORE FINAL
-    # ==========================================
 
     candidatos = candidatos.sort_values(
         "score_final_retrieval",
@@ -813,10 +998,208 @@ def buscar_chat(
     )
 
     # ==========================================
-    # 8. RETORNA TOP-K
+    # 9. ADICIONA CANDIDATOS INTERDISCIPLINARES
     # ==========================================
 
-    resultados = candidatos.head(top_k).copy()
+    if len(areas_identificadas) >= 2:
+
+        indices_extras = []
+
+        for area in areas_identificadas:
+
+            componentes_area = (
+                componentes_por_area.get(
+                    area,
+                    set()
+                )
+            )
+
+            if not componentes_area:
+                continue
+
+            candidatos_area = base_com_scores[
+                base_com_scores["Componente"]
+                .isin(componentes_area)
+            ].copy()
+
+            if candidatos_area.empty:
+                continue
+
+            # Se há campo explícito, usa primeiro
+            # apenas o campo solicitado.
+            if campo_identificado is not None:
+
+                candidatos_area_campo = (
+                    candidatos_area[
+                        candidatos_area["campo"]
+                        .apply(normalizar_busca)
+                        == normalizar_busca(
+                            campo_identificado
+                        )
+                    ]
+                    .copy()
+                )
+
+                if not candidatos_area_campo.empty:
+                    candidatos_area = candidatos_area_campo
+
+            candidatos_area = (
+                candidatos_area
+                .sort_values(
+                    "similaridade",
+                    ascending=False
+                )
+                .head(candidatos_por_area)
+            )
+
+            indices_extras.extend(
+                candidatos_area.index.tolist()
+            )
+
+        if indices_extras:
+
+            indices_extras = list(
+                dict.fromkeys(indices_extras)
+            )
+
+            extras = base_com_scores.loc[
+                indices_extras
+            ].copy()
+
+            extras["bonus_componente"] = 0.0
+            extras["bonus_campo"] = 0.0
+
+            if campo_identificado is not None:
+
+                mascara_extra_campo = (
+                    extras["campo"]
+                    .apply(normalizar_busca)
+                    == normalizar_busca(
+                        campo_identificado
+                    )
+                )
+
+                extras.loc[
+                    mascara_extra_campo,
+                    "bonus_campo"
+                ] = 0.10
+
+            extras[
+                "score_final_retrieval"
+            ] = (
+                extras["similaridade"]
+                + extras["bonus_componente"]
+                + extras["bonus_campo"]
+            )
+
+            candidatos = (
+                pd.concat(
+                    [
+                        candidatos,
+                        extras
+                    ]
+                )
+                .loc[
+                    lambda df:
+                    ~df.index.duplicated(
+                        keep="first"
+                    )
+                ]
+            )
+
+            candidatos = candidatos.sort_values(
+                "score_final_retrieval",
+                ascending=False
+            )
+
+    # ==========================================
+    # 10. MONTA TOP-K COM COBERTURA
+    # ==========================================
+
+    selecionados = []
+    indices_selecionados = set()
+
+    if len(areas_identificadas) >= 2:
+
+        # Primeiro garante pelo menos
+        # um resultado de cada área.
+        for area in areas_identificadas:
+
+            componentes_area = (
+                componentes_por_area.get(
+                    area,
+                    set()
+                )
+            )
+
+            if not componentes_area:
+                continue
+
+            candidatos_area = candidatos[
+                candidatos["Componente"]
+                .isin(componentes_area)
+            ]
+
+            if campo_identificado is not None:
+
+                candidatos_area_campo = (
+                    candidatos_area[
+                        candidatos_area["campo"]
+                        .apply(normalizar_busca)
+                        == normalizar_busca(
+                            campo_identificado
+                        )
+                    ]
+                )
+
+                if not candidatos_area_campo.empty:
+                    candidatos_area = (
+                        candidatos_area_campo
+                    )
+
+            if not candidatos_area.empty:
+
+                melhor = candidatos_area.iloc[0]
+
+                if (
+                    melhor.name
+                    not in indices_selecionados
+                ):
+                    selecionados.append(melhor)
+
+                    indices_selecionados.add(
+                        melhor.name
+                    )
+
+    # ==========================================
+    # 11. COMPLETA COM MELHORES SCORES
+    # ==========================================
+
+    for indice, linha in candidatos.iterrows():
+
+        if len(selecionados) >= top_k:
+            break
+
+        if indice in indices_selecionados:
+            continue
+
+        selecionados.append(
+            linha.copy()
+        )
+
+        indices_selecionados.add(
+            indice
+        )
+
+    resultados = pd.DataFrame(
+        selecionados[:top_k]
+    )
+
+    # ==========================================
+    # 12. RANK FINAL
+    # ==========================================
+
+    resultados = resultados.copy()
 
     resultados["rank"] = range(
         1,
@@ -824,7 +1207,6 @@ def buscar_chat(
     )
 
     return resultados
-
 # =========================
 # AVALIAÇÃO
 # =========================
