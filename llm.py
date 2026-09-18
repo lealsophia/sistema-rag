@@ -124,6 +124,11 @@ Pergunta atual:
                 contents=prompt
             )
 
+            print("\n===== DEBUG GEMINI =====")
+            print("Resposta:", repr(resposta.text))
+            print("Resposta completa:", resposta)
+            print("========================\n")
+
             return resposta.text
 
         except ClientError as erro:

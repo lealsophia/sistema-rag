@@ -1,14 +1,25 @@
-
-
-.env
-*.env
--firebase-adminsdk-.json
-credentials.json
-serviceAccountKey.json
-
+﻿# Ambientes virtuais
 .venv/
+.venv_antiga/
 venv/
-_pycache_/
-*.pyc
 
+# Credenciais
+.env
+*-firebase-adminsdk-*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyCharm
 .idea/
+
+# Cache/modelos
+.cache/
+
+# Arquivos temporários do Excel
+.~lock.*#
+
+# Resultados de experimentos
+comparacao_estrategias_*.xlsx

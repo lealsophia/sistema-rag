@@ -38,12 +38,12 @@ CAMPOS_TEXTUAIS = [
 # FUNÇÕES BÁSICAS
 # =========================
 def rodar_experimento_comparacao(
-    df_perguntas,
-    df_disciplinas,
-    modelo,
-    estrategia,
-    chunk_size,
-    overlap
+        df_perguntas,
+        df_disciplinas,
+        modelo,
+        estrategia,
+        chunk_size,
+        overlap
 ):
     df_chunks = gerar_chunks(
         df_disciplinas,
@@ -85,8 +85,8 @@ def rodar_experimento_comparacao(
 
     return resumo, df_resultados, df_logs, df_chunks
 
-def botao_copiar_resposta(texto):
 
+def botao_copiar_resposta(texto):
     texto_js = json.dumps(str(texto))
 
     components.html(
@@ -153,8 +153,8 @@ def botao_copiar_resposta(texto):
         height=35
     )
 
-def gerar_exportacao_conversa(titulo, mensagens):
 
+def gerar_exportacao_conversa(titulo, mensagens):
     conteudo = f"# {titulo}\n\n"
 
     for mensagem in mensagens:
@@ -169,8 +169,8 @@ def gerar_exportacao_conversa(titulo, mensagens):
 
     return conteudo
 
-def nome_arquivo_conversa(titulo):
 
+def nome_arquivo_conversa(titulo):
     nome = normalizar_busca(titulo)
 
     nome = re.sub(
@@ -186,14 +186,15 @@ def nome_arquivo_conversa(titulo):
 
     return f"{nome}.md"
 
+
 def grafico_barra_altair(
-    df,
-    x,
-    y,
-    titulo,
-    eixo_y,
-    eixo_x="Perguntas",
-    escala_0_1=False
+        df,
+        x,
+        y,
+        titulo,
+        eixo_y,
+        eixo_x="Perguntas",
+        escala_0_1=False
 ):
     escala_y = alt.Scale(domain=[0, 1]) if escala_0_1 else alt.Scale(zero=True)
 
@@ -219,6 +220,7 @@ def grafico_barra_altair(
     )
 
     st.altair_chart(chart, use_container_width=True)
+
 
 def grafico_linha_altair(df, x, y, titulo, eixo_y, escala_0_1=False):
     escala_y = alt.Scale(domain=[0, 1]) if escala_0_1 else alt.Scale(zero=True)
@@ -271,6 +273,7 @@ def grafico_barras_multiplas_altair(df, coluna_categoria, colunas_metricas, titu
 
     st.altair_chart(chart, use_container_width=True)
 
+
 def limpar(valor):
     if pd.isna(valor) or str(valor).strip() == "":
         return "Não se aplica"
@@ -305,8 +308,8 @@ def limpar_ruido_pdf(texto):
 
     return texto.strip()
 
-def precisa_reescrever(pergunta, historico):
 
+def precisa_reescrever(pergunta, historico):
     if not historico.strip():
         return False
 
@@ -337,13 +340,14 @@ def precisa_reescrever(pergunta, historico):
         for termo in referencias
     )
 
+
 def normalizar(texto):
     texto = str(texto).lower().strip()
     texto = re.sub(r"\s+", " ", texto)
     return texto
 
-def precisa_reescrever(pergunta, historico):
 
+def precisa_reescrever(pergunta, historico):
     if not historico.strip():
         return False
 
@@ -372,7 +376,9 @@ def precisa_reescrever(pergunta, historico):
         for termo in referencias
     )
 
+
 import unicodedata
+
 
 def normalizar_busca(texto):
     texto = str(texto).lower().strip()
@@ -398,6 +404,7 @@ def carregar_disciplinas():
 def carregar_modelo():
     return SentenceTransformer(MODELO)
 
+
 @st.cache_resource
 def preparar_base_chat(estrategia, chunk_size, overlap):
     st.write("⚙️ Gerando chunks e embeddings...")
@@ -419,6 +426,7 @@ def preparar_base_chat(estrategia, chunk_size, overlap):
     )
 
     return df_chunks, embeddings_chunks
+
 
 def validar_perguntas(df):
     colunas_obrigatorias = [
@@ -446,7 +454,6 @@ def validar_perguntas(df):
 # =========================
 
 def criar_splitter(estrategia, chunk_size, overlap):
-
     if estrategia == "fixo":
         return CharacterTextSplitter(
             chunk_size=chunk_size,
@@ -547,9 +554,9 @@ Carga horária em laboratório: {base_info["CH_laboratorio"]}
             texto_original = limpar_ruido_pdf(texto_original)
 
             if (
-                texto_original == "Não se aplica"
-                or texto_original.strip() == ""
-                or texto_original.lower() == "nan"
+                    texto_original == "Não se aplica"
+                    or texto_original.strip() == ""
+                    or texto_original.lower() == "nan"
             ):
                 continue
 
@@ -626,13 +633,13 @@ def buscar(pergunta, df_chunks, embeddings_chunks, modelo, top_k=TOP_K):
 
 
 def buscar_chat(
-    pergunta,
-    df_chunks,
-    embeddings_chunks,
-    modelo,
-    top_k=5,
-    top_candidatos=30,
-    candidatos_por_area=2
+        pergunta,
+        df_chunks,
+        embeddings_chunks,
+        modelo,
+        top_k=5,
+        top_candidatos=30,
+        candidatos_por_area=2
 ):
     """
     Busca otimizada para o chatbot.
@@ -777,14 +784,14 @@ def buscar_chat(
     campo_identificado = None
 
     for termo in sorted(
-        campos_possiveis,
-        key=len,
-        reverse=True
+            campos_possiveis,
+            key=len,
+            reverse=True
     ):
 
         if (
-            normalizar_busca(termo)
-            in pergunta_normalizada
+                normalizar_busca(termo)
+                in pergunta_normalizada
         ):
             campo_identificado = campos_possiveis[termo]
             break
@@ -814,8 +821,8 @@ def buscar_chat(
     ]
 
     if any(
-        termo in pergunta_normalizada
-        for termo in termos_estruturais
+            termo in pergunta_normalizada
+            for termo in termos_estruturais
     ):
         campo_identificado = "Estrutural"
 
@@ -844,8 +851,8 @@ def buscar_chat(
     for termo, area in areas_possiveis.items():
 
         if (
-            normalizar_busca(termo)
-            in pergunta_normalizada
+                normalizar_busca(termo)
+                in pergunta_normalizada
         ):
 
             if area not in areas_identificadas:
@@ -864,7 +871,7 @@ def buscar_chat(
         df_chunks["campo"]
         .apply(normalizar_busca)
         == "conhecimentos"
-    ]
+        ]
 
     for _, linha in chunks_conhecimentos.iterrows():
 
@@ -913,24 +920,24 @@ def buscar_chat(
             ].add(componente)
 
         if (
-            "portugues" in componente_norm
-            or "lingua portuguesa" in componente_norm
+                "portugues" in componente_norm
+                or "lingua portuguesa" in componente_norm
         ):
             componentes_por_area[
                 "portugues"
             ].add(componente)
 
         if (
-            "ingles" in componente_norm
-            or "lingua inglesa" in componente_norm
+                "ingles" in componente_norm
+                or "lingua inglesa" in componente_norm
         ):
             componentes_por_area[
                 "ingles"
             ].add(componente)
 
         if (
-            "espanhol" in componente_norm
-            or "espanhola" in componente_norm
+                "espanhol" in componente_norm
+                or "espanhola" in componente_norm
         ):
             componentes_por_area[
                 "espanhol"
@@ -941,8 +948,8 @@ def buscar_chat(
         # --------------------------
 
         if (
-            "/informatica" in texto_norm
-            or "informatica/" in texto_norm
+                "/informatica" in texto_norm
+                or "informatica/" in texto_norm
         ):
             componentes_por_area[
                 "informatica"
@@ -956,7 +963,6 @@ def buscar_chat(
     candidatos["bonus_campo"] = 0.0
 
     if componentes_identificados:
-
         componentes_norm = {
             normalizar_busca(c)
             for c in componentes_identificados
@@ -974,11 +980,10 @@ def buscar_chat(
         ] = 0.15
 
     if campo_identificado is not None:
-
         mascara_campo = (
-            candidatos["campo"]
-            .apply(normalizar_busca)
-            == normalizar_busca(campo_identificado)
+                candidatos["campo"]
+                .apply(normalizar_busca)
+                == normalizar_busca(campo_identificado)
         )
 
         candidatos.loc[
@@ -987,9 +992,9 @@ def buscar_chat(
         ] = 0.10
 
     candidatos["score_final_retrieval"] = (
-        candidatos["similaridade"]
-        + candidatos["bonus_componente"]
-        + candidatos["bonus_campo"]
+            candidatos["similaridade"]
+            + candidatos["bonus_componente"]
+            + candidatos["bonus_campo"]
     )
 
     candidatos = candidatos.sort_values(
@@ -1036,8 +1041,8 @@ def buscar_chat(
                         == normalizar_busca(
                             campo_identificado
                         )
-                    ]
-                    .copy()
+                        ]
+                        .copy()
                 )
 
                 if not candidatos_area_campo.empty:
@@ -1070,13 +1075,12 @@ def buscar_chat(
             extras["bonus_campo"] = 0.0
 
             if campo_identificado is not None:
-
                 mascara_extra_campo = (
-                    extras["campo"]
-                    .apply(normalizar_busca)
-                    == normalizar_busca(
-                        campo_identificado
-                    )
+                        extras["campo"]
+                        .apply(normalizar_busca)
+                        == normalizar_busca(
+                    campo_identificado
+                )
                 )
 
                 extras.loc[
@@ -1087,9 +1091,9 @@ def buscar_chat(
             extras[
                 "score_final_retrieval"
             ] = (
-                extras["similaridade"]
-                + extras["bonus_componente"]
-                + extras["bonus_campo"]
+                    extras["similaridade"]
+                    + extras["bonus_componente"]
+                    + extras["bonus_campo"]
             )
 
             candidatos = (
@@ -1149,7 +1153,7 @@ def buscar_chat(
                         == normalizar_busca(
                             campo_identificado
                         )
-                    ]
+                        ]
                 )
 
                 if not candidatos_area_campo.empty:
@@ -1162,8 +1166,8 @@ def buscar_chat(
                 melhor = candidatos_area.iloc[0]
 
                 if (
-                    melhor.name
-                    not in indices_selecionados
+                        melhor.name
+                        not in indices_selecionados
                 ):
                     selecionados.append(melhor)
 
@@ -1207,6 +1211,8 @@ def buscar_chat(
     )
 
     return resultados
+
+
 # =========================
 # AVALIAÇÃO
 # =========================
@@ -1246,13 +1252,13 @@ def avaliar(df_perguntas, df_chunks, embeddings_chunks, modelo):
         recall_1 = 1 if rank_correto == 1 else 0
 
         recall_5 = 1 if (
-            rank_correto is not None
-            and 2 <= rank_correto <= 5
+                rank_correto is not None
+                and 2 <= rank_correto <= 5
         ) else 0
 
         recall_10 = 1 if (
-            rank_correto is not None
-            and 6 <= rank_correto <= 10
+                rank_correto is not None
+                and 6 <= rank_correto <= 10
         ) else 0
 
         mrr = 1 / rank_correto if rank_correto else 0
@@ -1362,8 +1368,6 @@ if modo_uso in [
     "Experimento com arquivo de perguntas",
     "Chatbot interativo"
 ]:
-
-
     estrategia = st.sidebar.selectbox(
         "Estratégia de chunking",
         ["recursivo", "fixo", "semântico"]
@@ -1401,11 +1405,9 @@ if modo_uso in [
 
 st.metric("Disciplinas carregadas", len(df_disciplinas))
 
-
 # =========================
 # MODO EXPERIMENTO
 # =========================
-
 
 
 if modo_uso == "Experimento com arquivo de perguntas":
@@ -1473,8 +1475,6 @@ if modo_uso == "Experimento com arquivo de perguntas":
         if df_perguntas is not None:
             df_perguntas = validar_perguntas(df_perguntas)
 
-
-
     if df_perguntas is not None:
         st.metric("Perguntas carregadas", len(df_perguntas))
 
@@ -1482,7 +1482,6 @@ if modo_uso == "Experimento com arquivo de perguntas":
             st.dataframe(df_perguntas)
 
         if st.button("Rodar experimento"):
-
             with st.spinner("Gerando chunks..."):
                 df_chunks = gerar_chunks(
                     df_disciplinas,
@@ -1492,12 +1491,11 @@ if modo_uso == "Experimento com arquivo de perguntas":
                 )
 
             with st.spinner("Gerando embeddings..."):
-
-                    embeddings_chunks=modelo.encode(
-                        [f"passage: {t}" for t in df_chunks["texto"].tolist()],
-                        normalize_embeddings=True,
-                        show_progress_bar=False
-                    )
+                embeddings_chunks = modelo.encode(
+                    [f"passage: {t}" for t in df_chunks["texto"].tolist()],
+                    normalize_embeddings=True,
+                    show_progress_bar=False
+                )
 
             with st.spinner("Avaliando perguntas..."):
                 df_resultados, df_logs = avaliar(
@@ -1506,8 +1504,6 @@ if modo_uso == "Experimento com arquivo de perguntas":
                     embeddings_chunks,
                     modelo
                 )
-
-
 
             recall_1 = df_resultados["recall_1"].mean()
             recall_5 = df_resultados["recall_5"].mean()
@@ -1528,7 +1524,6 @@ if modo_uso == "Experimento com arquivo de perguntas":
                 "tempo_medio_ms": tempo_medio,
                 "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }])
-
 
             resumo_tipo = df_resultados.groupby("tipo_pergunta")[
                 ["recall_1", "recall_5", "recall_10", "mrr", "tempo_busca_ms"]
@@ -1691,8 +1686,6 @@ O campo campo_top1 mostra qual campo textual foi recuperado em primeiro lugar.
                     "mrr": "MRR"
                 })
 
-
-
         st.dataframe(df_resultados_exibir)
 
         if st.button("📊 Gerar gráfico dos resultado de cada pergunta"):
@@ -1751,8 +1744,6 @@ Neste experimento, Top-K = 10.
                     "texto_chunkado": "Trecho recuperado"
 
                 })
-
-
 
         st.dataframe(df_logs_exibir)
         col_comp, col_comp_help = st.columns([0.92, 0.08])
@@ -1918,7 +1909,6 @@ Quanto maior o valor, mais parecido semanticamente o modelo considerou o texto.
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-
 # =========================
 # MODO COMPARAÇÃO
 # =========================
@@ -2076,9 +2066,9 @@ Formatos aceitos:
         st.metric("Perguntas carregadas", len(df_perguntas_comp))
 
     if (
-        df_perguntas_comp is not None
-        and len(estrategias_comparar) >= 2
-        and st.button("⚖️ Rodar comparação")
+            df_perguntas_comp is not None
+            and len(estrategias_comparar) >= 2
+            and st.button("⚖️ Rodar comparação")
     ):
 
         resumos = []
@@ -2087,9 +2077,7 @@ Formatos aceitos:
         chunks_por_estrategia = {}
 
         for est in estrategias_comparar:
-
             with st.spinner(f"Rodando estratégia: {est}..."):
-
                 resumo_est, resultados_est, logs_est, chunks_est = rodar_experimento_comparacao(
                     df_perguntas_comp,
                     df_disciplinas,
@@ -2130,7 +2118,7 @@ Formatos aceitos:
         Os valores de acerto são apresentados em porcentagens.
 
         Campos da tabela:
-        
+
         - Total de trechos: quantidade de chunks gerados pela estratégia.
         - Acertos em 1º lugar: porcentagem de perguntas em que a resposta correta apareceu na primeira posição.
         - Acertos entre 2º e 5º: porcentagem de perguntas em que a resposta correta apareceu entre a segunda e a quinta posição.
@@ -2295,7 +2283,6 @@ Formatos aceitos:
                     "Todas as estratégias apresentaram o mesmo resultado nesta categoria."
                 )
         if st.button("📊 Gerar gráfico comparativo"):
-
             df_grafico = df_comparacao.copy()
 
             grafico_barras_multiplas_altair(
@@ -2399,7 +2386,6 @@ if modo_uso == "Chatbot interativo":
         st.session_state["conversation_id"] = conversation_id
         st.rerun()
 
-
     # =========================
     # LISTA CONVERSAS
     # =========================
@@ -2425,7 +2411,6 @@ if modo_uso == "Chatbot interativo":
     )
 
     st.session_state["conversation_id"] = titulos[titulo_conversa]
-
 
     with st.sidebar.popover(
             "🗑️ Excluir conversa",
@@ -2486,7 +2471,6 @@ if modo_uso == "Chatbot interativo":
         mime="text/markdown",
         use_container_width=True
     )
-
 
     # Exibe as mensagens antigas
     for mensagem in mensagens:
@@ -2646,7 +2630,6 @@ if modo_uso == "Chatbot interativo":
         contexto = ""
 
         for _, r in resultados_chat.iterrows():
-
             contexto += f"""
 Disciplina: {r["Componente"]}
 Campo: {r["campo"]}
@@ -2661,7 +2644,7 @@ Campo: {r["campo"]}
         # =========================
 
         with st.spinner(
-            "Gerando resposta com Gemini..."
+                "Gerando resposta com Gemini..."
         ):
 
             resposta = gerar_resposta(
@@ -2669,6 +2652,10 @@ Campo: {r["campo"]}
                 pergunta_usuario,
                 historico
             )
+
+            with st.expander("🧪 DEBUG - contexto enviado ao Gemini"):
+                st.code(contexto)
+                st.write("Tamanho do contexto:", len(contexto))
 
         # =========================
         # SALVA RESPOSTA
@@ -2805,10 +2792,6 @@ Campo: {r["campo"]}
                     resultados_exibir,
                     use_container_width=True
                 )
-
-
-
-
 
 if st.sidebar.button("Limpar cache"):
     st.cache_data.clear()
