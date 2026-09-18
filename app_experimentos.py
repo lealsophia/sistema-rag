@@ -1301,9 +1301,10 @@ def avaliar(df_perguntas, df_chunks, embeddings_chunks, modelo):
 # =========================
 
 st.set_page_config(
-    page_title="Experimentos Chunking",
-    page_icon="🧪",
-    layout="wide"
+    page_title="Assistente Acadêmico",
+    page_icon="💬",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 from auth import login, register, logout, usuario_logado
@@ -1343,31 +1344,328 @@ if not usuario_logado():
 
     st.stop()
 
-st.title("🧪 Laboratório de Estratégias de Chunking")
-if st.sidebar.button("🚪 Sair da conta"):
-    logout()
-    st.rerun()
+# =========================
+# INTERFACE
+# =========================
+
+st.markdown("""
+<style>
+
+/* ==========================================
+   SIDEBAR GERAL
+   ========================================== */
+[data-testid="stSidebar"] {
+    background-color: #17171f;
+    min-width: 360px !important;
+    width: 360px !important;
+}
+
+[data-testid="stSidebarContent"] {
+    width: 360px !important;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+/* ==========================================
+   TOPO DO ASSISTENTE
+   ========================================== */
+.topo-assistente {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 4px 6px 4px;
+    margin-bottom: 4px;
+}
+
+.topo-assistente-icone {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.topo-assistente-texto {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.topo-assistente-nome {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.topo-assistente-subtitulo {
+    margin-top: 4px;
+    font-size: 12px;
+    opacity: 0.55;
+}
+
+/* ==========================================
+   MODO
+   ========================================== */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] {
+    margin-top: 8px;
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+    min-height: 40px !important;
+    background: #0f1016 !important;
+    border: none !important;
+    padding: 0 8px !important;
+    border-radius: 8px !important;
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] span {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+}
+
+/* ==========================================
+   BOTÕES NORMAIS
+   ========================================== */
+[data-testid="stSidebar"] .stButton > button {
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 9px;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    transition: background-color 0.15s ease;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    background-color: rgba(255,255,255,0.07);
+}
+
+[data-testid="stSidebar"] .stButton > button p {
+    text-align: left !important;
+    width: 100% !important;
+    margin: 0 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+[data-testid="stSidebar"] .stButton > button > div {
+    width: 100% !important;
+    justify-content: flex-start !important;
+}
+
+/* ==========================================
+   NOVA CONVERSA
+   ========================================== */
+[data-testid="stSidebar"] button[kind="primary"] {
+    background-color: #6d46d9 !important;
+    border: none !important;
+    border-radius: 8px !important;
+    min-height: 42px !important;
+    justify-content: center !important;
+}
+
+[data-testid="stSidebar"] button[kind="primary"] p {
+    text-align: center !important;
+    font-weight: 500;
+}
+
+/* ==========================================
+   CONVERSAS
+   ========================================== */
+[class*="st-key-convrow_"] {
+    border-radius: 8px;
+    padding: 1px 2px;
+    margin-bottom: -4px;
+}
+
+[class*="st-key-convrow_"]:hover {
+    background-color: rgba(255,255,255,0.05);
+}
+
+[class*="st-key-convrow_"] .stButton > button {
+    justify-content: flex-start !important;
+    text-align: left !important;
+    padding-left: 6px !important;
+}
+
+[class*="st-key-convrow_"] .stButton > button p {
+    text-align: left !important;
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+/* ==========================================
+   MENU DA CONVERSA
+   ========================================== */
+[class*="st-key-convrow_"] [data-testid="stPopover"] button {
+    opacity: 0;
+    background: transparent !important;
+    border: none !important;
+    padding: 4px !important;
+    min-width: 24px !important;
+    transition: opacity 0.15s ease;
+}
+
+[class*="st-key-convrow_"]:hover [data-testid="stPopover"] button {
+    opacity: 1;
+}
+
+/* ==========================================
+   USUÁRIO E SAIR FIXOS NO RODAPÉ
+   ========================================== */
+
+.usuario-fixo {
+    position: fixed;
+    bottom: 48px;
+    left: 16px;
+
+    width: 328px;
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 8px 4px;
+
+    background: #17171f;
+
+    z-index: 1000;
+}
+
+.usuario-icone {
+    width: 34px;
+    height: 34px;
+
+    border-radius: 50%;
+
+    background: #2b2b35;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    font-size: 16px;
+}
+
+.usuario-email {
+    font-size: 12px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+
+/* BOTÃO SAIR */
+
+[data-testid="stSidebar"] [class*="st-key-botao_sair"] {
+    position: fixed;
+
+    bottom: 8px;
+    left: 16px;
+
+    width: 328px;
+
+    z-index: 1001;
+}
+
+[data-testid="stSidebar"] [class*="st-key-botao_sair"] button {
+    justify-content: flex-start !important;
+    text-align: left !important;
+    padding-left: 9px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# LOGIN
+# =========================
+
+from auth import login, register, logout, usuario_logado
+
+if not usuario_logado():
+    st.title("Login")
+    email = st.text_input("Email")
+    senha = st.text_input("Senha", type="password")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Entrar"):
+            ok, msg = login(email, senha)
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
+    with col2:
+        if st.button("Criar conta"):
+            ok, msg = register(email, senha)
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
+    st.stop()
+
+# =========================
+# DADOS / MODELO
+# =========================
 
 df_disciplinas = carregar_disciplinas()
 modelo = carregar_modelo()
 
-modo_uso = st.sidebar.radio(
-    "Modo de uso",
-    [
-        "Experimento com arquivo de perguntas",
-        "Comparar estratégias de chunking",
-        "Chatbot interativo"
-    ]
+# =========================
+# NAVEGAÇÃO PRINCIPAL
+# =========================
+
+opcoes_modo = {
+    "Chatbot Acadêmico": "Chatbot interativo",
+    "Avaliação do RAG": "Experimento com arquivo de perguntas",
+    "Comparar estratégias": "Comparar estratégias de chunking"
+}
+
+st.sidebar.markdown(
+    """
+    <div class="topo-assistente">
+        <div class="topo-assistente-icone">🤖</div>
+        <div class="topo-assistente-texto">
+            <div class="topo-assistente-nome">Assistente Acadêmico</div>
+            <div class="topo-assistente-subtitulo">IFSP</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
+
+modo_visual = st.sidebar.selectbox(
+    "Modo",
+    list(opcoes_modo.keys()),
+    index=0,
+    label_visibility="collapsed",
+    key="modo_principal"
+)
+
+modo_uso = opcoes_modo[modo_visual]
 
 estrategia = None
 chunk_size = None
 overlap = None
 
-if modo_uso in [
-    "Experimento com arquivo de perguntas",
-    "Chatbot interativo"
-]:
+# ==========================================
+# PARÂMETROS DE CHUNKING
+# ==========================================
+
+# Só aparecem nos modos de avaliação.
+# No Chatbot Acadêmico eles ficam ocultos.
+
+if modo_uso == "Experimento com arquivo de perguntas":
+
     estrategia = st.sidebar.selectbox(
         "Estratégia de chunking",
         ["recursivo", "fixo", "semântico"]
@@ -1391,19 +1689,53 @@ if modo_uso in [
 
     with st.sidebar.expander("❓ O que significam esses parâmetros?"):
         st.write("""
-    **Tamanho do chunk**  
-    Define o tamanho máximo de cada chunk gerado a partir do documento.  
-    Neste sistema, esse valor é medido em **caracteres**.
+        **Tamanho do chunk**
 
-    **Sobreposição**  
-    Define quantos caracteres do final de um chunk serão repetidos no início do próximo.  
-    Isso ajuda a preservar o contexto quando uma informação fica dividida entre dois chunks.
+        Define o tamanho máximo de cada chunk gerado a partir do documento.
+        Neste sistema, esse valor é medido em **caracteres**.
 
-    Exemplo:  
-    Se o tamanho do chunk for 700 e a sobreposição for 120, cada trecho terá até 700 caracteres, e 120 caracteres poderão se repetir entre trechos consecutivos.
-    """)
+        **Sobreposição**
 
-st.metric("Disciplinas carregadas", len(df_disciplinas))
+        Define quantos caracteres do final de um chunk serão repetidos
+        no início do próximo.
+
+        Isso ajuda a preservar o contexto quando uma informação fica
+        dividida entre dois chunks.
+
+        Exemplo:
+
+        Se o tamanho do chunk for 700 e a sobreposição for 120,
+        cada trecho terá até 700 caracteres, e 120 caracteres poderão
+        se repetir entre trechos consecutivos.
+        """)
+
+# ==========================================
+# RODAPÉ DA SIDEBAR
+# ==========================================
+
+email_usuario = st.session_state["user"]["email"]
+
+html_usuario = f"""
+<div class="usuario-fixo">
+<div class="usuario-icone">👤</div>
+<div class="usuario-email">{email_usuario}</div>
+</div>
+"""
+
+st.sidebar.markdown(
+    html_usuario,
+    unsafe_allow_html=True
+)
+
+if st.sidebar.button(
+    "🚪 Sair",
+    use_container_width=True,
+    key="botao_sair"
+):
+    logout()
+    st.rerun()
+
+st.sidebar.markdown("</div></div>", unsafe_allow_html=True)
 
 # =========================
 # MODO EXPERIMENTO
@@ -2357,10 +2689,7 @@ Formatos aceitos:
 # MODO CHATBOT
 # =========================
 
-
 if modo_uso == "Chatbot interativo":
-
-    st.subheader("💬 Chatbot RAG")
 
     from firestore import (
         listar_conversas,
@@ -2377,17 +2706,39 @@ if modo_uso == "Chatbot interativo":
 
     user = st.session_state["user"]
 
+    st.markdown(
+        """
+        <div style="margin-left: 0; padding-top: 4px;">
+            <div style="font-size: 28px; font-weight: 650; line-height: 1.2;">
+                Chatbot Acadêmico <span style="font-size: 15px; opacity: .65;">⌄</span>
+            </div>
+            <div style="font-size: 12px; opacity: .55; margin-top: 8px;">
+                Tire suas dúvidas sobre o Projeto Pedagógico do Curso Técnico em Informática.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
     # =========================
     # NOVA CONVERSA
     # =========================
 
-    if st.sidebar.button("➕ Nova conversa"):
+    if st.sidebar.button(
+            "➕ Nova conversa",
+            type="primary",
+            use_container_width=True,
+            key="nova_conversa"
+    ):
         conversation_id = criar_conversa(user["uid"])
         st.session_state["conversation_id"] = conversation_id
+        st.session_state.pop("select_conversas", None)
         st.rerun()
 
     # =========================
-    # LISTA CONVERSAS
+    # LISTA DE CONVERSAS
     # =========================
 
     conversas = listar_conversas(user["uid"])
@@ -2399,96 +2750,94 @@ if modo_uso == "Chatbot interativo":
 
     conversas = listar_conversas(user["uid"])
 
-    titulos = {
-        c["title"]: c["id"]
-        for c in conversas
-    }
+    if "conversation_id" not in st.session_state or not any(
+            c["id"] == st.session_state["conversation_id"] for c in conversas
+    ):
+        st.session_state["conversation_id"] = conversas[0]["id"]
 
-    titulo_conversa = st.sidebar.selectbox(
-        "Conversas",
-        list(titulos.keys()),
-        key="select_conversas"
+    st.sidebar.markdown("### Conversas")
+
+    # Cada conversa ocupa uma linha; o menu aparece somente no hover.
+    for conversa_item in conversas:
+
+        conversa_id = conversa_item["id"]
+        titulo = conversa_item["title"]
+
+        titulo_exibido = titulo
+        if len(titulo_exibido) > 32:
+            titulo_exibido = titulo_exibido[:29] + "..."
+
+        with st.sidebar.container(key=f"convrow_{conversa_id}"):
+            col_conversa, col_menu = st.columns([0.88, 0.12], gap="small")
+
+            with col_conversa:
+                if st.button(
+                        titulo_exibido,
+                        key=f"conversa_{conversa_id}",
+                        use_container_width=True
+                ):
+                    st.session_state["conversation_id"] = conversa_id
+                    st.rerun()
+
+            with col_menu:
+                with st.popover("⋯", use_container_width=True):
+                    if st.download_button(
+                            "⬇️ Exportar",
+                            data=gerar_exportacao_conversa(
+                                titulo,
+                                listar_mensagens(user["uid"], conversa_id)
+                            ),
+                            file_name=nome_arquivo_conversa(titulo),
+                            mime="text/markdown",
+                            use_container_width=True,
+                            key=f"exportar_{conversa_id}"
+                    ):
+                        pass
+
+                    st.divider()
+
+                    if st.button(
+                            "🗑️ Excluir",
+                            key=f"excluir_{conversa_id}",
+                            use_container_width=True
+                    ):
+                        excluir_conversa(user["uid"], conversa_id)
+                        if st.session_state.get("conversation_id") == conversa_id:
+                            st.session_state.pop("conversation_id", None)
+                            st.session_state.pop("select_conversas", None)
+                        st.rerun()
+
+    # =========================
+    # CONVERSA ATUAL
+    # =========================
+
+    conversa_selecionada = next(
+        c for c in conversas
+        if c["id"] == st.session_state["conversation_id"]
     )
 
-    st.session_state["conversation_id"] = titulos[titulo_conversa]
-
-    with st.sidebar.popover(
-            "🗑️ Excluir conversa",
-            use_container_width=True
-    ):
-
-        st.warning(
-            "Esta ação não pode ser desfeita."
-        )
-
-        st.write(
-            f'Deseja excluir a conversa "{titulo_conversa}"?'
-        )
-
-        if st.button(
-                "Excluir definitivamente",
-                type="primary",
-                use_container_width=True
-        ):
-            excluir_conversa(
-                user["uid"],
-                st.session_state["conversation_id"]
-            )
-
-            # Remove a conversa atualmente selecionada
-            st.session_state.pop(
-                "conversation_id",
-                None
-            )
-
-            # MUITO IMPORTANTE:
-            # limpa o valor antigo do selectbox
-            st.session_state.pop(
-                "select_conversas",
-                None
-            )
-
-            st.rerun()
-
-    # =========================
-    # CARREGA HISTÓRICO
-    # =========================
+    titulo_conversa = conversa_selecionada["title"]
 
     mensagens = listar_mensagens(
         user["uid"],
         st.session_state["conversation_id"]
     )
 
-    conteudo_exportacao = gerar_exportacao_conversa(
-        titulo_conversa,
-        mensagens
-    )
+    # =========================
+    # HISTÓRICO
+    # =========================
 
-    st.sidebar.download_button(
-        "⬇️ Exportar conversa",
-        data=conteudo_exportacao,
-        file_name=nome_arquivo_conversa(titulo_conversa),
-        mime="text/markdown",
-        use_container_width=True
-    )
-
-    # Exibe as mensagens antigas
     for mensagem in mensagens:
-
         with st.chat_message(mensagem["role"]):
             st.write(mensagem["content"])
             if mensagem["role"] == "assistant":
-                botao_copiar_resposta(
-                    mensagem["content"]
-                )
+                botao_copiar_resposta(mensagem["content"])
 
     # =========================
     # CAMPO DA PERGUNTA
     # =========================
 
-    pergunta_usuario = st.chat_input(
-        "Digite sua pergunta..."
-    )
+    pergunta_usuario = st.chat_input("Digite sua pergunta...")
 
     if pergunta_usuario and pergunta_usuario.strip():
 
@@ -2502,61 +2851,40 @@ if modo_uso == "Chatbot interativo":
                 f"Aguarde aproximadamente {segundos_restantes} segundos "
                 f"antes de tentar novamente."
             )
-
             st.stop()
 
-        # =========================
-        # MONTA HISTÓRICO ANTIGO
-        # =========================
-
         historico = ""
-
         for mensagem in mensagens:
-
             role = mensagem["role"]
             content = mensagem["content"]
-
             if role == "user":
                 historico += f"Usuário: {content}\n"
-
             elif role == "assistant":
                 historico += f"Assistente: {content}\n"
 
-        # =========================
-        # MOSTRA NOVA PERGUNTA
-        # =========================
-
         with st.chat_message("user"):
             st.write(pergunta_usuario)
-
-        # =========================
-        # ATUALIZA TÍTULO
-        # =========================
 
         conversa_doc = (
             db.collection("users")
             .document(user["uid"])
             .collection("conversations")
-            .document(
-                st.session_state["conversation_id"]
-            )
+            .document(st.session_state["conversation_id"])
             .get()
         )
 
         dados = conversa_doc.to_dict()
 
         if dados["title"] == "Nova conversa":
-
             titulo = pergunta_usuario.strip()
-
             if len(titulo) > 60:
                 titulo = titulo[:57] + "..."
-
             atualizar_titulo_conversa(
                 user["uid"],
                 st.session_state["conversation_id"],
                 titulo
             )
+
         salvar_mensagem(
             user["uid"],
             st.session_state["conversation_id"],
@@ -2565,44 +2893,22 @@ if modo_uso == "Chatbot interativo":
         )
 
         with st.spinner("Preparando base de conhecimento..."):
-
             df_chunks_chat, embeddings_chunks_chat = preparar_base_chat(
                 estrategia,
                 chunk_size,
                 overlap
             )
 
-        # =========================
-        # BUSCA TOP-5
-        # =========================
         with st.spinner("Interpretando contexto da conversa..."):
-
-            if precisa_reescrever(
-                    pergunta_usuario,
-                    historico
-            ):
-
+            if precisa_reescrever(pergunta_usuario, historico):
                 pergunta_busca = reescrever_pergunta(
                     pergunta_usuario,
                     historico
                 )
-
-
             else:
-
                 pergunta_busca = pergunta_usuario
 
-            st.write("🔍 Pergunta original:", pergunta_usuario)
-
-            st.write("🔄 Pergunta usada na busca:", pergunta_busca)
-
-            st.write(
-                "🧠 Reescrita usada:",
-                precisa_reescrever(pergunta_usuario, historico)
-            )
-
         with st.spinner("Buscando resposta..."):
-
             resultados_chat = buscar_chat(
                 pergunta_busca,
                 df_chunks_chat,
@@ -2611,24 +2917,7 @@ if modo_uso == "Chatbot interativo":
                 top_k=5
             )
 
-            st.dataframe(
-                resultados_chat[[
-                    "rank",
-                    "Componente",
-                    "campo",
-                    "similaridade",
-                    "bonus_componente",
-                    "bonus_campo",
-                    "score_final_retrieval"
-                ]]
-            )
-
-        # =========================
-        # MONTA CONTEXTO RAG
-        # =========================
-
         contexto = ""
-
         for _, r in resultados_chat.iterrows():
             contexto += f"""
 Disciplina: {r["Componente"]}
@@ -2639,27 +2928,12 @@ Campo: {r["campo"]}
 -----------------------------
 """
 
-        # =========================
-        # GERA RESPOSTA COM GEMINI
-        # =========================
-
-        with st.spinner(
-                "Gerando resposta com Gemini..."
-        ):
-
+        with st.spinner("Gerando resposta com Gemini..."):
             resposta = gerar_resposta(
                 contexto,
                 pergunta_usuario,
                 historico
             )
-
-            with st.expander("🧪 DEBUG - contexto enviado ao Gemini"):
-                st.code(contexto)
-                st.write("Tamanho do contexto:", len(contexto))
-
-        # =========================
-        # SALVA RESPOSTA
-        # =========================
 
         salvar_mensagem(
             user["uid"],
@@ -2668,130 +2942,7 @@ Campo: {r["campo"]}
             resposta
         )
 
-        # =========================
-        # RECARREGA CONVERSA
-        # =========================
-
         st.rerun()
-
-        # =========================
-        # EXIBE RESPOSTA
-        # =========================
-        with st.chat_message("assistant"):
-
-            st.write(resposta)
-
-            # =========================================
-            # RESULTADOS TÉCNICOS DO RAG
-            # =========================================
-            with st.expander("📚 Ver fontes e resultados recuperados"):
-                st.info("""
-                O sistema encontrou os trechos mais relevantes nos documentos.
-                Esses resultados mostram quais informações foram utilizadas
-                como contexto para gerar a resposta.
-                """)
-
-                # =========================
-                # TOP-5
-                # =========================
-                st.markdown("### 🔎 Top-5 resultados mais relevantes")
-
-                for _, r in resultados_chat.head(5).iterrows():
-                    with st.expander(
-                            f"{int(r['rank'])}º resultado — "
-                            f"{r['Componente']} | {r['campo']}"
-                    ):
-                        st.markdown(f"""
-    **Disciplina:** {r["Componente"]}
-
-    **Campo:** {r["campo"]}
-
-    **Similaridade semântica:** {round(r["similaridade"], 4)}
-
-    **Trecho encontrado:**
-    """)
-
-                        st.write(r["texto_chunkado"])
-
-                # =========================
-                # FONTES RECUPERADAS
-                # =========================
-                st.markdown("### 📑 Fontes recuperadas")
-
-                fontes = resultados_chat[[
-                    "rank",
-                    "Componente",
-                    "campo",
-                    "similaridade"
-                ]].copy()
-
-                fontes = fontes.rename(columns={
-                    "rank": "Posição",
-                    "Componente": "Disciplina",
-                    "campo": "Campo",
-                    "similaridade": "Similaridade semântica"
-                })
-
-                st.dataframe(
-                    fontes,
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-                # =========================
-                # TABELA DETALHADA
-                # =========================
-                st.markdown("### 📊 Top-5 detalhado")
-
-                with st.expander(
-                        "❓ O que significam os campos desta tabela?"
-                ):
-                    st.markdown("""
-    **ID do trecho**
-    - Identificador do trecho dentro do documento.
-
-    **Texto original do documento**
-    - Conteúdo completo antes da divisão em chunks.
-
-    **Chunk encontrado**
-    - Parte do documento recuperada pelo sistema.
-
-    **Texto utilizado na busca**
-    - Texto efetivamente transformado em embedding.
-
-    **Tamanho do chunk**
-    - Quantidade de caracteres presentes no trecho.
-
-    **Posição**
-    - Ordem do resultado no ranking.
-
-    **Similaridade**
-    - Proximidade semântica entre a pergunta e o trecho.
-
-    **Pontuação final**
-    - Valor utilizado para ordenar os resultados.
-    """)
-
-                resultados_exibir = resultados_chat.rename(columns={
-                    "rank": "Posição",
-                    "Componente": "Disciplina",
-                    "campo": "Tipo de conteúdo",
-                    "similaridade": "Similaridade",
-                    "score_final_retrieval": "Pontuação final",
-                    "tamanho_chunk": "Tamanho do chunk",
-                    "texto_chunkado": "Chunk encontrado",
-                    "estrategia": "Estratégia",
-                    "chunk_size": "Tamanho dos chunks",
-                    "chunk_overlap": "Sobreposição entre chunks",
-                    "chunk_id": "ID do chunk",
-                    "texto_original_campo": "Texto original do documento",
-                    "texto": "Texto utilizado na busca"
-                })
-
-                st.dataframe(
-                    resultados_exibir,
-                    use_container_width=True
-                )
 
 if st.sidebar.button("Limpar cache"):
     st.cache_data.clear()
