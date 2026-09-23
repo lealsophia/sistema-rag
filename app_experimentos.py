@@ -92,9 +92,10 @@ def botao_copiar_resposta(texto):
     components.html(
         f"""
         <div style="
+            width: 85%;
             display: flex;
             justify-content: flex-end;
-            margin-top: -8px;
+            margin-top: -4px;
         ">
 
             <button
@@ -114,7 +115,6 @@ def botao_copiar_resposta(texto):
         </div>
 
         <script>
-
             const botao = document.getElementById("botao-copiar");
 
             botao.addEventListener("click", async () => {{
@@ -122,22 +122,18 @@ def botao_copiar_resposta(texto):
                 const texto = {texto_js};
 
                 try {{
-
                     await navigator.clipboard.writeText(texto);
-
                 }} catch (erro) {{
 
                     const area = document.createElement("textarea");
 
                     area.value = texto;
                     document.body.appendChild(area);
-
                     area.select();
 
                     document.execCommand("copy");
 
                     document.body.removeChild(area);
-
                 }}
 
                 botao.innerText = "✓ Copiado";
@@ -145,12 +141,10 @@ def botao_copiar_resposta(texto):
                 setTimeout(() => {{
                     botao.innerText = "📋 Copiar";
                 }}, 1500);
-
             }});
-
         </script>
         """,
-        height=35
+        height=30
     )
 
 
@@ -407,7 +401,6 @@ def carregar_modelo():
 
 @st.cache_resource
 def preparar_base_chat(estrategia, chunk_size, overlap):
-    st.write("⚙️ Gerando chunks e embeddings...")
 
     df_disciplinas = carregar_disciplinas()
     modelo = carregar_modelo()
@@ -1581,6 +1574,145 @@ st.markdown("""
     text-align: left !important;
     padding-left: 9px !important;
 }
+
+/* ==========================================
+   CABEÇALHO DO CHAT
+   ========================================== */
+
+.cabecalho-chat {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    font-size: 30px;
+    font-weight: 600;
+
+    margin-top: -20px;
+    margin-bottom: 35px;
+}
+
+/* ==========================================
+   MENSAGEM DO USUÁRIO
+   ========================================== */
+
+.mensagem-usuario-container {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    margin: 12px 0 20px 0;
+}
+
+.mensagem-usuario {
+    display: inline-block;
+    width: fit-content;
+    max-width: 65%;
+
+    padding: 16px 22px;
+    border-radius: 12px;
+
+    background: rgba(255, 255, 255, 0.06);
+
+    font-size: 16px;
+    line-height: 1.5;
+
+    word-wrap: break-word;
+}
+
+/* ==========================================
+   MENSAGEM DO ASSISTENTE
+   ========================================== */
+
+/* Container da mensagem do assistente */
+[data-testid="stChatMessage"] {
+    background: transparent !important;
+}
+
+/* Área onde fica o conteúdo da resposta */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
+    background: rgba(255, 255, 255, 0.045) !important;
+
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+
+    width: fit-content !important;
+    max-width: 85% !important;
+}
+
+/* Remove margem extra dos parágrafos */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p {
+    margin: 0 !important;
+}
+
+/* ==========================================
+   CAMPO DE PERGUNTA
+   ========================================== */
+
+/* Caixa completa */
+[data-testid="stChatInput"] {
+    border-radius: 16px !important;
+}
+
+/* Área interna */
+[data-testid="stChatInput"] > div {
+    border-radius: 16px !important;
+}
+
+/* Campo de texto */
+[data-testid="stChatInput"] textarea {
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+
+    padding: 10px 16px !important;
+
+    font-size: 14px !important;
+
+    overflow-y: auto !important;
+    resize: none !important;
+}
+
+/* Container do textarea */
+[data-testid="stChatInput"] [data-baseweb="textarea"] {
+    min-height: 0 !important;
+    height: auto !important;
+}
+
+/* Botão enviar */
+[data-testid="stChatInput"] button {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+
+    border-radius: 50% !important;
+
+    background-color: #9B7AE8 !important;
+    border: none !important;
+
+    margin-right: 8px !important;
+    align-self: center !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Hover do botão */
+[data-testid="stChatInput"] button:hover {
+    background-color: #AA8DF0 !important;
+}
+
+/* Contorno roxo ao digitar */
+[data-testid="stChatInput"]:focus-within {
+    border-color: #9B7AE8 !important;
+    box-shadow: 0 0 0 1px #9B7AE8 !important;
+}
+
+[data-testid="stChatInput"]:focus-within > div {
+    border-color: #9B7AE8 !important;
+    box-shadow: none !important;
+}
+
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1653,9 +1785,10 @@ modo_visual = st.sidebar.selectbox(
 
 modo_uso = opcoes_modo[modo_visual]
 
-estrategia = None
-chunk_size = None
-overlap = None
+# Parâmetros padrão usados pelo Chatbot Acadêmico
+estrategia = "recursivo"
+chunk_size = 700
+overlap = 120
 
 # ==========================================
 # PARÂMETROS DE CHUNKING
@@ -2708,19 +2841,12 @@ if modo_uso == "Chatbot interativo":
 
     st.markdown(
         """
-        <div style="margin-left: 0; padding-top: 4px;">
-            <div style="font-size: 28px; font-weight: 650; line-height: 1.2;">
-                Chatbot Acadêmico <span style="font-size: 15px; opacity: .65;">⌄</span>
-            </div>
-            <div style="font-size: 12px; opacity: .55; margin-top: 8px;">
-                Tire suas dúvidas sobre o Projeto Pedagógico do Curso Técnico em Informática.
-            </div>
+        <div class="cabecalho-chat">
+            <span>Chatbot Acadêmico</span>
         </div>
         """,
         unsafe_allow_html=True
     )
-
-    st.divider()
 
     # =========================
     # NOVA CONVERSA
@@ -2828,9 +2954,24 @@ if modo_uso == "Chatbot interativo":
     # =========================
 
     for mensagem in mensagens:
-        with st.chat_message(mensagem["role"]):
-            st.write(mensagem["content"])
-            if mensagem["role"] == "assistant":
+
+        if mensagem["role"] == "user":
+
+            st.markdown(
+                f"""
+                <div class="mensagem-usuario-container">
+                    <div class="mensagem-usuario">
+                        {mensagem["content"]}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        else:
+
+            with st.chat_message("assistant", avatar="⚙️"):
+                st.write(mensagem["content"])
                 botao_copiar_resposta(mensagem["content"])
 
     # =========================
@@ -2862,8 +3003,16 @@ if modo_uso == "Chatbot interativo":
             elif role == "assistant":
                 historico += f"Assistente: {content}\n"
 
-        with st.chat_message("user"):
-            st.write(pergunta_usuario)
+        st.markdown(
+            f"""
+            <div class="mensagem-usuario-container">
+                <div class="mensagem-usuario">
+                    {pergunta_usuario}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
         conversa_doc = (
             db.collection("users")
@@ -2917,6 +3066,20 @@ if modo_uso == "Chatbot interativo":
                 top_k=5
             )
 
+            fontes = []
+
+            for _, r in resultados_chat.iterrows():
+                fontes.append({
+                    "rank": int(r["rank"]),
+                    "componente": str(r["Componente"]),
+                    "campo": str(r["campo"]),
+                    "similaridade": float(r["similaridade"]),
+                    "score": float(r["score_final_retrieval"])
+                })
+
+            st.write(resultados_chat.columns.tolist())
+            st.dataframe(resultados_chat)
+
         contexto = ""
         for _, r in resultados_chat.iterrows():
             contexto += f"""
@@ -2935,17 +3098,25 @@ Campo: {r["campo"]}
                 historico
             )
 
+        # Prepara as fontes recuperadas pelo RAG
+        fontes = []
+
+        for _, r in resultados_chat.iterrows():
+            fontes.append({
+                "rank": int(r["rank"]),
+                "componente": str(r["Componente"]),
+                "campo": str(r["campo"]),
+                "similaridade": float(r["similaridade"]),
+                "score": float(r["score_final_retrieval"])
+            })
+
+        # Salva a resposta junto com as fontes utilizadas
         salvar_mensagem(
             user["uid"],
             st.session_state["conversation_id"],
             "assistant",
-            resposta
+            resposta,
+            fontes=fontes
         )
 
         st.rerun()
-
-if st.sidebar.button("Limpar cache"):
-    st.cache_data.clear()
-    st.cache_resource.clear()
-    st.session_state.clear()
-    st.rerun()

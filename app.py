@@ -140,9 +140,14 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📚 Chatbot do PPC")
-st.write("Faça perguntas sobre disciplinas, ementas, conteúdos, objetivos, aulas e carga horária.")
-
+st.markdown(
+    """
+    <div class="cabecalho-chat">
+        <span>Chatbot Acadêmico</span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 pergunta = st.text_input("Digite sua pergunta:")
 
 if pergunta:

@@ -209,20 +209,24 @@ def atualizar_titulo_conversa(uid, conversation_id, titulo):
       })
 
 from google.cloud import firestore
-def salvar_mensagem(uid, conversation_id, role, content):
+def salvar_mensagem(uid, conversation_id, role, content, fontes=None):
+
+    dados_mensagem = {
+        "role": role,
+        "content": content,
+        "created_at": firestore.SERVER_TIMESTAMP
+    }
+
+    # Adiciona as fontes apenas quando existirem
+    if fontes is not None:
+        dados_mensagem["fontes"] = fontes
 
     db.collection("users") \
       .document(uid) \
       .collection("conversations") \
       .document(conversation_id) \
       .collection("messages") \
-      .add({
-
-          "role": role,
-          "content": content,
-          "created_at": firestore.SERVER_TIMESTAMP
-
-      })
+      .add(dados_mensagem)
 
     # Atualiza a data da conversa
     db.collection("users") \
