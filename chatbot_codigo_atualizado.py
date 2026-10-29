@@ -1,0 +1,3343 @@
+import re
+import time
+from datetime import datetime
+from llm import gerar_resposta
+import json
+import pandas as pd
+import streamlit as st
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+from langchain_text_splitters import RecursiveCharacterTextSplitter, CharacterTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_community.embeddings import HuggingFaceEmbeddings
+import altair as alt
+from firestore import listar_mensagens
+import streamlit.components.v1 as components
+
+# =========================
+# CONFIGURAÇÕES
+# =========================
+
+ARQUIVO_DISCIPLINAS = "disciplinas.xlsx"
+
+MODELO = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+TOP_K = 10
+
+# Objetivos gerais transcritos da seção 5 do PPC do curso.
+# Mantidos no código para não depender de uma segunda planilha em produção.
+OBJETIVOS_GERAIS_CURSO = [
+    "Promover a integração entre a Educação Básica e a Educação Profissional, consolidando e aprofundando os conhecimentos adquiridos no Ensino Fundamental.",
+    "Preparar o estudante para sua integração ao mundo do trabalho, contemplando as dimensões do eixo tecnológico Informação e Comunicação.",
+    "Assumir como princípios balizadores em suas práticas educativas o respeito aos direitos humanos e o reconhecimento da diversidade, pautado pelos princípios da igualdade nas relações sociais, étnico-raciais, religiosa, sexual e de gênero e o reconhecimento e respeito às diferenças.",
+    "Formar profissionais que entendam o preconceito racial e a discriminação de gênero e sexo como um problema que fomenta a exclusão social e as mais diversas formas de violência na sociedade, atuando como um sujeito transformador desta realidade.",
+    "Proporcionar uma formação crítica e ética em todas as áreas de conhecimento, que considere os arranjos econômicos locais, regionais e nacionais, de modo a possibilitar ações transformadoras, combatendo as desigualdades e discriminações de gênero, sexo, étnicoraciais e sociais, no mundo do trabalho e sociedade como um todo.",
+    "Formar profissionais que apliquem os conhecimentos científicos e tecnológicos voltados para o desenvolvimento, o teste, a atualização e a manutenção de sistemas computacionais, de acordo com as tendências atuais da área de tecnologia.",
+    "Desenvolver conhecimentos e saberes relacionados aos processos de planejamento e execução de projetos computacionais de forma a garantir a entrega de produtos digitais, análise de softwares, testagem de protótipos, de acordo com suas finalidades.",
+    "Possibilitar conhecimentos e saberes relacionados às normas técnicas, à liderança de equipes, à solução de problemas técnicos e à assertividade na comunicação de laudos e análises.",
+    "Desenvolver habilidades relacionadas à solução de soluções em BI e integrações sistêmicas.",
+    "Oportunizar reflexões sobre o exercício da cidadania no ambiente de atuação profissional e na vida social, por meio do respeito ao pluralismo de ideias e atitudes éticas.",
+    "Propiciar o desenvolvimento educacional do sujeito para continuar os estudos, articulando os com os fundamentos científicos da pesquisa e extensão, por meio de processos educativos que promovam a autonomia, a cidadania e o protagonismo na construção de seu projeto de vida e que garantam a indissociabilidade entre trabalho, ciência, tecnologia e cultura.",
+    "Proporcionar uma formação geral integrada, possibilitando a compreensão de maneira crítica e autônoma de sua atuação no mundo como cidadãos e profissionais técnicos de qualidade, estimulando a inovação tecnológica.",
+    "Possibilitar a análise de situações-problema e avaliar aplicações do conhecimento científico e tecnológico e suas implicações no mundo, utilizando procedimentos e linguagens próprios das Ciências da Natureza.",
+    "Desenvolver o reconhecimento e utilizar os conhecimentos historicamente produzidos pelas Ciências da Natureza para que os estudantes consigam elaborar argumentos, realizar previsões e propostas de intervenção, pautadas em evidências científicas e fundamentar decisões éticas e responsáveis.",
+    "Promover ações coletivas que aperfeiçoem processos produtivos, minimizem impactos socioambientais, sendo capaz de comunicar suas descobertas e conclusões a públicos variados, em diversos contextos e por meio de diferentes mídias e tecnologias digitais de informação e comunicação.",
+    "Possibilitar o estudo sistemático dos fenômenos, processos e características físicas, químicas e biológicas dos diversos materiais, espaços e seres vivos, de forma a compreender as peculiaridades e consequências de alterações no ambiente e na diversidade da vida.",
+    "Promover a análise e problematizar processos políticos, econômicos, sociais, ambientais e culturais nos âmbitos local, regional, nacional e mundial em diferentes tempos e espaços.",
+    "Oportunizar a compreensão dos processos históricos que geram e transformam as sociedades e geram classes hegemônicas e dominantes.",
+    "Desenvolver a compreensão que as transformações históricas dentro do desenvolvimento de processos mais amplos que envolvem realidades regionais, nacionais e internacionais implicam em consequências que podem significar permanências ou transformações, e mesmo rupturas, em estruturas sociais e na cultura, na infraestrutura econômica e na superestrutura que corresponde ao Estado, que estão em permanente transformação.",
+    "Promover a valorização e reflexão a respeito do patrimônio histórico e cultural e de seus significados, favorecendo a reflexão, argumentação e construção da memória histórica das classes e setores subalternos, dominados e marginalizados da sociedade.",
+    "Promover o desenvolvimento da consciência crítica acerca da realidade sócio-histórica, cultural e política e do mundo do trabalho.",
+    "Formar profissionais com visão humanística e técnica capazes de compreender a produção material e imaterial da humanidade, reconhecendo todas as manifestações artísticas e culturais como parte do patrimônio histórico e cultural da humanidade e de sua própria sociedade e como produtos das transformações materiais vividas por diferentes grupos humanos em diferentes contextos históricos.",
+    "Promover o conhecimento do legado intelectual e cultural da humanidade por meio do estudo das diferentes correntes filosóficas.",
+    "Formar profissionais que possuam o entendimento de sua inserção e ocupação do espaço geográfico e as relações da vida humana com a paisagem, em seus desdobramentos político-sociais, culturais, econômicos e humanos.",
+    "Promover o desenvolvimento de estratégias, conceitos e procedimentos matemáticos, em unidades de conhecimento da Matemática – Números e Álgebra, Geometria e Medidas, Probabilidade e Estatística – para interpretar, construir modelos e resolver problemas em diversos contextos.",
+    "Proporcionar aos estudantes experiências que lhes permitam articular conhecimentos matemáticos ao propor e/ou participar de ações para investigar desafios do mundo contemporâneo, incluindo as implicações da tecnologia no mundo do trabalho, por meio de conceitos, procedimentos e linguagens próprios da Matemática.",
+    "Propiciar espaços formativos que reconheçam a matemática além de seu caráter instrumental, colocando-se como área do conhecimento advinda da construção humana, com características próprias de investigação e de linguagem.",
+    "Fomentar o domínio da linguagem matemática e suas relações com o mundo e com as Ciências, incentivando a compreensão e utilização de diferentes registros de representação matemáticos (algébrico, geométrico, estatístico, computacional etc.), na busca de solução e comunicação de resultados de problemas, de modo a favorecer a construção e o desenvolvimento do raciocínio matemático.",
+    "Proporcionar os conhecimentos necessários para o entendimento dos significados, da estrutura e da função dos conceitos matemáticos, de tal forma que o estudante possa relacionar conceitos teóricos com situações reais e estabelecer relações com outras áreas do saber.",
+    "Incentivar o olhar crítico e a postura criativa dos estudantes frente à Matemática e proporcionar experiências que permitam o desenvolvimento de diferentes maneiras de pensar, representar, comunicar, argumentar e transformar a realidade por meio do conhecimento matemático.",
+    "Oportunizar a investigação e a elaboração de conjecturas a respeito de diferentes conceitos e propriedades matemáticas, empregando recursos e estratégias como observação de padrões, experimentações e tecnologias digitais na construção de sistemas computacionais, evidenciando a lógica existente na Informática, tanto na estruturação de sistemas como na elaboração de softwares.",
+    "Oportunizar a compreensão das línguas como fenômeno (geo)político, histórico, social, variável, heterogêneo e sensível aos contextos de uso, reconhecendo-as e vivenciando-as como formas de expressões identitárias, pessoais e coletivas bem como incentivar o respeito às variedades linguísticas e a ação no enfrentamento de preconceitos de qualquer natureza, na promoção e na garantia da democracia, dos direitos humanos, da consciência socioambiental e do consumo responsável, em âmbito local, regional e global, evidenciando o respeito a diversidade de saberes, identidades e culturas.",
+    "Fomentar o uso das diferentes formas de linguagens, códigos e suas tecnologias considerando-as como meios de busca e produção de signos e significados ao expressarem, investigarem e se comunicarem por intermédio das artes, da motricidade, da oralidade e da escrita.",
+    "Proporcionar a aprendizagem de diferentes manifestações da cultura corporal, possibilitando ao estudante reconhecer e valorizar as diferenças de desempenho, linguagem e expressão, além de identificar, na convivência e nas práticas pacíficas, maneiras eficazes de crescimento coletivo, dialogando, refletindo e adotando uma postura democrática sobre diferentes pontos de vista postos em debate.",
+    "Propiciar espaços formativos que oportunizem a compreensão do funcionamento das diferentes linguagens e práticas culturais (artísticas, corporais e verbais), mobilizando-as na recepção e produção de conhecimentos, pautados em formação integral com vistas ao exercício da cidadania para atuação como agente modificador nas várias esferas sociais.",
+    "Capacitar os estudantes a ler, articular, interpretar e expressar-se por meio de símbolos e códigos em diferentes linguagens e representações, estabelecendo estratégias de solução e articulando os conhecimentos das várias ciências e outros campos do saber, em uma perspectiva histórico-social e formação de consciência crítica e da própria identidade.",
+    "Possibilitar o domínio da análise, interpretação e aplicação dos recursos expressivos das linguagens, relacionando textos e discursos com seus contextos de produção e circulação para a apresentação de ideias e projetos voltados à ciência e tecnologia.",
+    "Capacitar os estudantes a lerem e produzirem, com destreza e criatividade, diversos gêneros textuais e artísticos, de modo a desenvolver habilidades de comunicação verbal e corporal para que consigam compreender e se fazerem entender em diferentes contextos, profissionais ou não.",
+    "Incentivar a realização de produções significativas, individuais e coletivas, em consonância com as necessidades do mundo globalizado moderno, promovendo os direitos humanos e o respeito ao meio ambiente.",
+    "Proporcionar ações para que desenvolvam a relação de qualidade e autoconfiança com as próprias produções (verbais, motrizes e artísticas), possibilitando os processos de construção, expressão e comunicação de suas ideias, análises, argumentos, sentimentos e emoções, tanto em língua vernácula quanto estrangeira.",
+    "Proporcionar aos estudantes experiências que lhes permitam utilizar e compreender as diferentes linguagens para exercer de forma autônoma, crítica, criativa, ética e solidária sua performance social.",
+    "Capacitar os estudantes para a análise, reflexão, respeito e preservação das diversas manifestações de Arte – em suas múltiplas funções – utilizadas por diferentes grupos sociais e étnicos, interagindo com o patrimônio nacional e internacional, que se deve conhecer e compreender em sua dimensão sócio-histórica.",
+    "Fornecer noções para a aplicação de conceitos artísticos que permitam ao estudante conhecer, analisar, refletir e compreender critérios culturalmente construídos e embasados em conhecimentos afins, de caráter filosófico, histórico, sociológico, científico e tecnológico, entre outros.",
+    "Proporcionar ao estudante amplo conhecimento das línguas portuguesa e estrangeira (língua inglesa e/ou espanhola) que permitam o uso da norma culta na forma escrita e oral em seus contextos formais, além de capacitá-lo na compreensão do uso adequado de suas variações linguísticas, quando necessário.",
+    "Habilitar o egresso a reconhecer e fazer uso das estruturas gramaticais, do vocabulário e das expressões técnicas pertinentes a sua área de formação bem como utilizá-las como ferramenta para sua inserção social e no mundo do trabalho.",
+    "Inserir o estudante no mundo da literatura, evidenciando sua importância no contexto histórico e sua relevância enquanto instrumento de expressão dos movimentos sociais e culturais e para o despertar do interesse pela leitura.",
+    "Mobilizar práticas de linguagem no universo digital e práticas artísticas, corporais e verbais, considerando as dimensões técnicas, críticas, criativas, éticas e estéticas, para expandir as formas de produzir sentidos, de engajar-se em práticas autorais e coletivas, e de aprender a aprender nos campos da ciência, cultura, trabalho, informação e vida pessoal e coletiva.",
+    "Valorizar e incentivar a comunicação interpessoal de forma ética e respeitosa, nos diversos ambientes, acadêmicos, profissionais ou sociais.",
+]
+
+
+CAMPOS_TEXTUAIS = [
+    "Conhecimentos",
+    "Ementa",
+    "Objetivos",
+    "Areas_integracao",
+    "Conteudo",
+    "Bibliografia_Basica",
+    "Bibliografia_Complementar"
+]
+
+
+# =========================
+# FUNÇÕES BÁSICAS
+# =========================
+def rodar_experimento_comparacao(
+        df_perguntas,
+        df_disciplinas,
+        modelo,
+        estrategia,
+        chunk_size,
+        overlap
+):
+    df_chunks = gerar_chunks(
+        df_disciplinas,
+        estrategia,
+        chunk_size,
+        overlap
+    )
+
+    embeddings_chunks = modelo.encode(
+        [f"passage: {t}" for t in df_chunks["texto"].tolist()],
+        normalize_embeddings=True,
+        show_progress_bar=False
+    )
+
+    df_resultados, df_logs = avaliar(
+        df_perguntas,
+        df_chunks,
+        embeddings_chunks,
+        modelo
+    )
+
+    recall_1 = df_resultados["recall_1"].mean()
+    recall_5 = df_resultados["recall_5"].mean()
+    recall_10 = df_resultados["recall_10"].mean()
+    mrr = df_resultados["mrr"].mean()
+    tempo_medio = df_resultados["tempo_busca_ms"].mean()
+
+    resumo = {
+        "estrategia": estrategia,
+        "chunk_size": chunk_size,
+        "overlap": overlap,
+        "total_chunks": len(df_chunks),
+        "acertos_1_lugar": recall_1,
+        "acertos_2_5_lugar": recall_5,
+        "acertos_6_10_lugar": recall_10,
+        "qualidade_media_posicao": mrr,
+        "tempo_medio_busca_ms": tempo_medio
+    }
+
+    return resumo, df_resultados, df_logs, df_chunks
+
+
+def botao_copiar_resposta(texto):
+    texto_js = json.dumps(str(texto))
+
+    components.html(
+        f"""
+        <div style="
+            width: 85%;
+            display: flex;
+            justify-content: flex-end;
+            margin-top: -4px;
+        ">
+
+            <button
+                id="botao-copiar"
+                style="
+                    border: none;
+                    background: transparent;
+                    cursor: pointer;
+                    font-size: 13px;
+                    color: #888;
+                    padding: 4px 8px;
+                "
+            >
+                📋 Copiar
+            </button>
+
+        </div>
+
+        <script>
+            const botao = document.getElementById("botao-copiar");
+
+            botao.addEventListener("click", async () => {{
+
+                const texto = {texto_js};
+
+                try {{
+                    await navigator.clipboard.writeText(texto);
+                }} catch (erro) {{
+
+                    const area = document.createElement("textarea");
+
+                    area.value = texto;
+                    document.body.appendChild(area);
+                    area.select();
+
+                    document.execCommand("copy");
+
+                    document.body.removeChild(area);
+                }}
+
+                botao.innerText = "✓ Copiado";
+
+                setTimeout(() => {{
+                    botao.innerText = "📋 Copiar";
+                }}, 1500);
+            }});
+        </script>
+        """,
+        height=30
+    )
+
+
+def gerar_exportacao_conversa(titulo, mensagens):
+    conteudo = f"# {titulo}\n\n"
+
+    for mensagem in mensagens:
+
+        if mensagem["role"] == "user":
+            autor = "Usuário"
+        else:
+            autor = "Assistente"
+
+        conteudo += f"## {autor}\n\n"
+        conteudo += f"{mensagem['content']}\n\n"
+
+    return conteudo
+
+
+def nome_arquivo_conversa(titulo):
+    nome = normalizar_busca(titulo)
+
+    nome = re.sub(
+        r"[^a-z0-9]+",
+        "_",
+        nome
+    )
+
+    nome = nome.strip("_")
+
+    if not nome:
+        nome = "conversa"
+
+    return f"{nome}.md"
+
+
+def grafico_barra_altair(
+        df,
+        x,
+        y,
+        titulo,
+        eixo_y,
+        eixo_x="Perguntas",
+        escala_0_1=False
+):
+    escala_y = alt.Scale(domain=[0, 1]) if escala_0_1 else alt.Scale(zero=True)
+
+    chart = alt.Chart(df).mark_bar().encode(
+        x=alt.X(
+            x,
+            sort=None,
+            axis=alt.Axis(
+                labelAngle=0,
+                title=eixo_x
+            )
+        ),
+        y=alt.Y(
+            y,
+            scale=escala_y,
+            axis=alt.Axis(title=eixo_y)
+        ),
+        color=alt.Color(x, legend=None),
+        tooltip=[x, y]
+    ).properties(
+        title=titulo,
+        height=380
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+
+
+def grafico_linha_altair(df, x, y, titulo, eixo_y, escala_0_1=False):
+    escala_y = alt.Scale(domain=[0, 1]) if escala_0_1 else alt.Scale(zero=True)
+
+    chart = alt.Chart(df).mark_line(point=True).encode(
+        x=alt.X(
+            x,
+            axis=alt.Axis(labelAngle=0, title=None)
+        ),
+        y=alt.Y(
+            y,
+            scale=escala_y,
+            axis=alt.Axis(title=eixo_y)
+        ),
+        tooltip=[x, y]
+    ).properties(
+        title=titulo,
+        height=380
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+
+
+def grafico_barras_multiplas_altair(df, coluna_categoria, colunas_metricas, titulo, eixo_y):
+    df_long = df.melt(
+        id_vars=[coluna_categoria],
+        value_vars=colunas_metricas,
+        var_name="Métrica",
+        value_name="Valor"
+    )
+
+    chart = alt.Chart(df_long).mark_bar().encode(
+        x=alt.X(
+            coluna_categoria,
+            sort=None,
+            axis=alt.Axis(labelAngle=0, title=None)
+        ),
+        y=alt.Y(
+            "Valor",
+            scale=alt.Scale(domain=[0, 1]),
+            axis=alt.Axis(title=eixo_y)
+        ),
+        color=alt.Color("Métrica", title="Métrica"),
+        xOffset="Métrica",
+        tooltip=[coluna_categoria, "Métrica", "Valor"]
+    ).properties(
+        title=titulo,
+        height=420
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+
+
+def limpar(valor):
+    if pd.isna(valor) or str(valor).strip() == "":
+        return "Não se aplica"
+    return str(valor).strip()
+
+
+def limpar_ruido_pdf(texto):
+    texto = str(texto)
+
+    # Remove valores vazios comuns
+    texto = texto.replace("nan", "")
+
+    # Remove cabeçalhos e rodapés repetidos do PDF
+    padroes_remover = [
+        r"Projeto Pedagógico do Curso Técnico em Informática Integrado ao Ensino Médio",
+        r"CUBATÃO",
+        r"TÉCNICO EM INFORMÁTICA INTEGRADO AO ENSINO MÉDIO",
+        r"Técnico em Informática Integrado ao Ensino Médio",
+        r"Curso Técnico em Informática Integrado ao Ensino Médio",
+    ]
+
+    for padrao in padroes_remover:
+        texto = re.sub(padrao, " ", texto, flags=re.IGNORECASE)
+
+    # Remove números de página isolados
+    texto = re.sub(r"\bPágina\s*\d+\b", " ", texto, flags=re.IGNORECASE)
+    texto = re.sub(r"\b\d+\s*/\s*\d+\b", " ", texto)
+
+    # Remove espaços repetidos, mas preserva quebras de linha
+    texto = re.sub(r"[ \t]+", " ", texto)
+    texto = re.sub(r"\n{3,}", "\n\n", texto)
+
+    return texto.strip()
+
+
+def precisa_reescrever(pergunta, historico):
+    if not historico.strip():
+        return False
+
+    pergunta_norm = normalizar_busca(pergunta)
+
+    referencias = [
+        "ela",
+        "ele",
+        "dela",
+        "dele",
+        "essa",
+        "esse",
+        "dessa",
+        "desse",
+        "isso",
+        "aquilo",
+        "e a de",
+        "e o de",
+        "e qual",
+        "e quais",
+        "e quanto",
+        "e quantas",
+        "e quantos"
+    ]
+
+    return any(
+        termo in pergunta_norm
+        for termo in referencias
+    )
+
+
+def normalizar(texto):
+    texto = str(texto).lower().strip()
+    texto = re.sub(r"\s+", " ", texto)
+    return texto
+
+
+def precisa_reescrever(pergunta, historico):
+    if not historico.strip():
+        return False
+
+    pergunta_norm = normalizar_busca(pergunta)
+
+    referencias = [
+        "ela",
+        "ele",
+        "dela",
+        "dele",
+        "essa",
+        "esse",
+        "dessa",
+        "desse",
+        "e a de",
+        "e o de",
+        "e qual",
+        "e quais",
+        "e quanto",
+        "e quantas",
+        "e quantos"
+    ]
+
+    return any(
+        termo in pergunta_norm
+        for termo in referencias
+    )
+
+
+import unicodedata
+
+
+def normalizar_busca(texto):
+    texto = str(texto).lower().strip()
+
+    texto = unicodedata.normalize("NFD", texto)
+    texto = "".join(
+        caractere
+        for caractere in texto
+        if unicodedata.category(caractere) != "Mn"
+    )
+
+    texto = re.sub(r"\s+", " ", texto)
+
+    return texto
+
+
+@st.cache_data
+def carregar_disciplinas():
+    return pd.read_excel(ARQUIVO_DISCIPLINAS)
+
+
+@st.cache_resource
+def carregar_modelo():
+    return SentenceTransformer(MODELO)
+
+@st.cache_resource(show_spinner=False)
+def preparar_base_chat(estrategia, chunk_size, overlap):
+
+    df_disciplinas = carregar_disciplinas()
+    modelo = carregar_modelo()
+
+    df_chunks = gerar_chunks(
+        df_disciplinas,
+        estrategia,
+        chunk_size,
+        overlap
+    )
+
+    embeddings_chunks = modelo.encode(
+        [f"passage: {t}" for t in df_chunks["texto"].tolist()],
+        normalize_embeddings=True,
+        show_progress_bar=False
+    )
+
+    return df_chunks, embeddings_chunks
+
+def validar_perguntas(df):
+    colunas_obrigatorias = [
+        "id",
+        "pergunta",
+        "tipo_pergunta",
+        "componente_esperado",
+        "campo_esperado"
+    ]
+
+    faltando = [
+        col for col in colunas_obrigatorias
+        if col not in df.columns
+    ]
+
+    if faltando:
+        st.error(f"O CSV está sem as colunas obrigatórias: {faltando}")
+        return None
+
+    return df
+
+
+# =========================
+# SPLITTER
+# =========================
+
+def criar_splitter(estrategia, chunk_size, overlap):
+    if estrategia == "fixo":
+        return CharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=overlap,
+            separator=" "
+        )
+
+    if estrategia == "recursivo":
+        return RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=overlap,
+            separators=[
+                "\n\n",
+                "\n",
+                ". ",
+                "; ",
+                ", ",
+                " ",
+                ""
+            ]
+        )
+
+    if estrategia == "semântico":
+        return RecursiveCharacterTextSplitter(
+            chunk_size=500,
+            chunk_overlap=50,
+            separators=[
+                ". ",
+                "; ",
+                "\n",
+                " ",
+                ""
+            ]
+        )
+
+    raise ValueError("Estratégia inválida.")
+
+
+# =========================
+# GERAR CHUNKS
+# =========================
+
+def criar_chunk_visao_geral_curso(df, estrategia, chunk_size, overlap):
+    """Cria um contexto agregado para perguntas sobre o curso como um todo."""
+    if df is None or df.empty:
+        return None
+
+    def valores_unicos(coluna):
+        if coluna not in df.columns:
+            return []
+        valores = []
+        for valor in df[coluna].tolist():
+            texto = limpar(valor)
+            if texto != "Não se aplica" and texto and texto not in valores:
+                valores.append(texto)
+        return valores
+
+    curso = " | ".join(valores_unicos("Curso")) or "Curso Técnico em Informática"
+    componentes = valores_unicos("Componente")
+    anos = valores_unicos("Ano")
+    tipos = valores_unicos("Tipo")
+    nucleos = valores_unicos("Núcleo")
+
+    linhas = [
+        "VISÃO GERAL DO CURSO",
+        f"Curso: {curso}",
+        "Este trecho reúne informações da matriz curricular para perguntas gerais sobre o curso.",
+    ]
+
+    if tipos:
+        linhas.append("Tipos de componentes curriculares registrados: " + ", ".join(tipos) + ".")
+    if nucleos:
+        linhas.append("Núcleos curriculares registrados: " + ", ".join(nucleos) + ".")
+    if anos:
+        linhas.append("Anos/períodos registrados na matriz: " + ", ".join(anos) + ".")
+
+    # Organização das disciplinas por ano, mantendo os nomes que constam na planilha.
+    if "Ano" in df.columns and "Componente" in df.columns:
+        linhas.append("Disciplinas por ano/período:")
+        agrupado = df[["Ano", "Componente"]].copy()
+        agrupado["Ano"] = agrupado["Ano"].apply(limpar)
+        agrupado["Componente"] = agrupado["Componente"].apply(limpar)
+        agrupado = agrupado[
+            (agrupado["Ano"] != "Não se aplica") &
+            (agrupado["Componente"] != "Não se aplica")
+        ].drop_duplicates()
+        for ano, grupo in agrupado.groupby("Ano", sort=False):
+            nomes = list(dict.fromkeys(grupo["Componente"].tolist()))
+            linhas.append(f"- {ano}: {', '.join(nomes)}")
+
+    if componentes:
+        linhas.append("Lista de componentes curriculares registrados: " + "; ".join(componentes) + ".")
+
+    # Usa as categorias existentes na planilha como evidência das áreas/núcleos,
+    # sem inventar classificações que não estejam documentadas.
+    if "Areas_integracao" in df.columns:
+        integracoes = []
+        for valor in df["Areas_integracao"].tolist():
+            texto = limpar_ruido_pdf(limpar(valor))
+            if texto != "Não se aplica" and texto and texto not in integracoes:
+                integracoes.append(texto)
+        if integracoes:
+            linhas.append("Áreas de integração registradas nas disciplinas:")
+            linhas.extend(f"- {texto}" for texto in integracoes[:40])
+
+    # Objetivos gerais do curso extraídos da seção 5 do PPC.
+    if OBJETIVOS_GERAIS_CURSO:
+        linhas.append("OBJETIVOS GERAIS DO CURSO (transcrição do PPC, seção 5):")
+        linhas.extend(
+            f"{numero}. {objetivo}"
+            for numero, objetivo in enumerate(OBJETIVOS_GERAIS_CURSO, start=1)
+        )
+
+    texto = "\n".join(linhas)
+    return {
+        "Curso": curso,
+        "Componente": "Visão geral do curso Técnico em Informática",
+        "Tipo": "Visão geral",
+        "Núcleo": "Visão geral",
+        "Ano": "Todos os anos",
+        "Sigla": "Geral",
+        "Aulas_semanais": "Não se aplica",
+        "Total_aulas": "Não se aplica",
+        "CH_presencial": "Não se aplica",
+        "CH_distancia": "Não se aplica",
+        "Total_horas": "Não se aplica",
+        "Docentes": "Não se aplica",
+        "CH_laboratorio": "Não se aplica",
+        "estrategia": estrategia,
+        "chunk_size": chunk_size,
+        "chunk_overlap": overlap,
+        "campo": "Visao_geral_curso",
+        "chunk_id": 0,
+        "texto_original_campo": texto,
+        "texto_chunkado": texto,
+        "texto": texto,
+        "tamanho_chunk": len(texto),
+    }
+
+
+def pergunta_sobre_curso_como_um_todo(pergunta):
+    """Reconhece perguntas de visão geral sem afetar perguntas de uma disciplina específica."""
+    pergunta_norm = normalizar_busca(pergunta)
+    padroes = [
+        "areas de conhecimento", "area de conhecimento", "principais areas de conhecimento",
+        "estrutura curricular", "caracteristicas da estrutura", "organizacao curricular",
+        "matriz curricular", "visao geral do curso", "curso como um todo",
+        "caracteristicas do curso", "como o curso e organizado", "como esta organizado o curso",
+        "disciplinas fazem parte do curso", "disciplinas compoem o curso",
+        "componentes curriculares do curso", "lista de disciplinas do curso",
+        "objetivos de formacao do curso", "objetivos gerais do curso",
+        "objetivo geral do curso", "objetivos do curso tecnico em informatica",
+        "quais sao os objetivos do curso", "qual e o objetivo do curso",
+        "formacao oferecida pelo curso",
+        "areas contempladas no curso", "areas de conhecimento contempladas",
+        "quais sao as disciplinas do curso", "quais disciplinas tem no curso",
+    ]
+    return any(normalizar_busca(padrao) in pergunta_norm for padrao in padroes)
+
+
+def gerar_chunks(df, estrategia, chunk_size, overlap):
+    chunks = []
+
+    for _, row in df.iterrows():
+
+        base_info = {
+            "Curso": limpar(row.get("Curso")),
+            "Componente": limpar(row.get("Componente")),
+            "Tipo": limpar(row.get("Tipo")),
+            "Núcleo": limpar(row.get("Núcleo")),
+            "Ano": limpar(row.get("Ano")),
+            "Sigla": limpar(row.get("Sigla")),
+            "Aulas_semanais": limpar(row.get("Aulas_semanais")),
+            "Total_aulas": limpar(row.get("Total_aulas")),
+            "CH_presencial": limpar(row.get("CH_presencial")),
+            "CH_distancia": limpar(row.get("CH_distancia")),
+            "Total_horas": limpar(row.get("Total_horas")),
+            "Docentes": limpar(row.get("Docentes")),
+            "CH_laboratorio": limpar(row.get("CH_laboratorio")),
+        }
+
+        texto_estrutural = f"""
+Curso: {base_info["Curso"]}
+Disciplina: {base_info["Componente"]}
+Tipo: {base_info["Tipo"]}
+Núcleo: {base_info["Núcleo"]}
+Ano: {base_info["Ano"]}
+Sigla: {base_info["Sigla"]}
+
+Nº de aulas semanais: {base_info["Aulas_semanais"]}
+Total de aulas: {base_info["Total_aulas"]}
+Carga horária presencial: {base_info["CH_presencial"]}
+Carga horária a distância: {base_info["CH_distancia"]}
+Total de horas: {base_info["Total_horas"]}
+Quantidade de docentes: {base_info["Docentes"]}
+Carga horária em laboratório: {base_info["CH_laboratorio"]}
+""".strip()
+
+        texto_estrutural = limpar_ruido_pdf(texto_estrutural)
+
+        chunks.append({
+            **base_info,
+            "estrategia": estrategia,
+            "chunk_size": chunk_size,
+            "chunk_overlap": overlap,
+            "campo": "Estrutural",
+            "chunk_id": 0,
+            "texto_original_campo": texto_estrutural,
+            "texto_chunkado": texto_estrutural,
+            "texto": texto_estrutural,
+            "tamanho_chunk": len(texto_estrutural)
+        })
+
+        for campo in CAMPOS_TEXTUAIS:
+            texto_original = limpar(row.get(campo))
+            texto_original = limpar_ruido_pdf(texto_original)
+
+            if (
+                    texto_original == "Não se aplica"
+                    or texto_original.strip() == ""
+                    or texto_original.lower() == "nan"
+            ):
+                continue
+
+            splitter = criar_splitter(
+                estrategia,
+                chunk_size,
+                overlap
+            )
+
+            partes = splitter.split_text(texto_original)
+
+            for i, parte in enumerate(partes):
+                parte = limpar_ruido_pdf(parte)
+
+                if not parte:
+                    continue
+
+                texto_chunk = f"""
+                Disciplina: {base_info["Componente"]}
+                Ano: {base_info["Ano"]}
+                Campo: {campo}
+
+                {parte}
+                """.strip()
+
+                texto_chunk = limpar_ruido_pdf(texto_chunk)
+
+                chunks.append({
+                    **base_info,
+                    "estrategia": estrategia,
+                    "chunk_size": chunk_size,
+                    "chunk_overlap": overlap,
+                    "campo": campo,
+                    "chunk_id": i,
+                    "texto_original_campo": texto_original,
+                    "texto_chunkado": parte,
+                    "texto": texto_chunk,
+                    "tamanho_chunk": len(texto_chunk)
+                })
+
+    # Acrescenta um chunk agregado, dedicado a perguntas sobre o curso inteiro.
+    chunk_geral = criar_chunk_visao_geral_curso(
+        df, estrategia, chunk_size, overlap
+    )
+    if chunk_geral is not None:
+        chunks.append(chunk_geral)
+
+    df_chunks = pd.DataFrame(chunks)
+
+    if not df_chunks.empty:
+        df_chunks = df_chunks.drop_duplicates(
+            subset=["Componente", "campo", "chunk_id", "texto_chunkado"]
+        ).reset_index(drop=True)
+
+    return df_chunks
+
+
+# =========================
+# BUSCA
+# =========================
+
+def buscar(pergunta, df_chunks, embeddings_chunks, modelo, top_k=TOP_K):
+    emb_pergunta = modelo.encode(
+        [f"query: {pergunta}"],
+        normalize_embeddings=True
+    )
+
+    similaridades = cosine_similarity(
+        emb_pergunta,
+        embeddings_chunks
+    )[0]
+
+    ordem = similaridades.argsort()[::-1][:top_k]
+
+    resultados = df_chunks.iloc[ordem].copy()
+    resultados["rank"] = range(1, len(resultados) + 1)
+    resultados["similaridade"] = similaridades[ordem]
+    resultados["score_final_retrieval"] = similaridades[ordem]
+
+    return resultados
+
+
+def buscar_chat(
+        pergunta,
+        df_chunks,
+        embeddings_chunks,
+        modelo,
+        top_k=5,
+        top_candidatos=30,
+        candidatos_por_area=2
+):
+    """
+    Busca otimizada para o chatbot.
+
+    Fluxo:
+    1. Busca semântica.
+    2. Recupera candidatos gerais.
+    3. Identifica componentes explícitos.
+    4. Identifica campo solicitado.
+    5. Identifica áreas mencionadas.
+    6. Faz reranking normal.
+    7. Em perguntas interdisciplinares:
+       - adiciona até N candidatos relevantes por área;
+       - prioriza o campo solicitado;
+       - garante cobertura das áreas.
+    8. Retorna Top-K final.
+
+    IMPORTANTE:
+    Esta função é exclusiva do chatbot.
+    A função buscar() dos experimentos permanece inalterada.
+    """
+
+    # ==========================================
+    # 1. EMBEDDING DA PERGUNTA
+    # ==========================================
+
+    emb_pergunta = modelo.encode(
+        [f"query: {pergunta}"],
+        normalize_embeddings=True
+    )
+
+    similaridades = cosine_similarity(
+        emb_pergunta,
+        embeddings_chunks
+    )[0]
+
+    pergunta_normalizada = normalizar_busca(pergunta)
+
+    # Base completa com score semântico
+    base_com_scores = df_chunks.copy()
+    base_com_scores["similaridade"] = similaridades
+
+    # ==========================================
+    # 2. CANDIDATOS GERAIS
+    # ==========================================
+
+    quantidade_candidatos = min(
+        top_candidatos,
+        len(df_chunks)
+    )
+
+    ordem = similaridades.argsort()[::-1][
+        :quantidade_candidatos
+    ]
+
+    candidatos = df_chunks.iloc[ordem].copy()
+    candidatos["similaridade"] = similaridades[ordem]
+
+    # ==========================================
+    # 3. COMPONENTES EXPLICITAMENTE CITADOS
+    # ==========================================
+
+    componentes = (
+        df_chunks["Componente"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    componentes = sorted(
+        componentes,
+        key=lambda x: len(str(x)),
+        reverse=True
+    )
+
+    componentes_identificados = []
+
+    for componente in componentes:
+
+        componente_norm = normalizar_busca(componente)
+
+        if componente_norm in pergunta_normalizada:
+            componentes_identificados.append(componente)
+
+    # ==========================================
+    # 4. CAMPO SOLICITADO
+    # ==========================================
+
+    campos_possiveis = {
+        "bibliografia complementar":
+            "Bibliografia_Complementar",
+
+        "bibliografia básica":
+            "Bibliografia_Basica",
+
+        "bibliografia basica":
+            "Bibliografia_Basica",
+
+        "áreas de integração":
+            "Areas_integracao",
+
+        "areas de integração":
+            "Areas_integracao",
+
+        "areas de integracao":
+            "Areas_integracao",
+
+        "área de integração":
+            "Areas_integracao",
+
+        "area de integracao":
+            "Areas_integracao",
+
+        "conteúdo programático":
+            "Conteudo",
+
+        "conteudo programatico":
+            "Conteudo",
+
+        "conteúdo":
+            "Conteudo",
+
+        "conteudo":
+            "Conteudo",
+
+        "conhecimentos":
+            "Conhecimentos",
+
+        "conhecimento":
+            "Conhecimentos",
+
+        "objetivos":
+            "Objetivos",
+
+        "objetivo":
+            "Objetivos",
+
+        "ementa":
+            "Ementa"
+    }
+
+    campo_identificado = None
+
+    for termo in sorted(
+            campos_possiveis,
+            key=len,
+            reverse=True
+    ):
+
+        if (
+                normalizar_busca(termo)
+                in pergunta_normalizada
+        ):
+            campo_identificado = campos_possiveis[termo]
+            break
+
+    # ==========================================
+    # 5. PERGUNTAS ESTRUTURAIS
+    # ==========================================
+
+    termos_estruturais = [
+        "carga horaria",
+        "quantas horas",
+        "total de horas",
+        "aulas semanais",
+        "quantas aulas",
+        "total de aulas",
+        "qual ano",
+        "em que ano",
+        "ano e oferecida",
+        "ano e oferecido",
+        "sigla",
+        "quantidade de docentes",
+        "quantos docentes",
+        "quantos professores",
+        "laboratorio",
+        "carga horaria presencial",
+        "carga horaria a distancia"
+    ]
+
+    if any(
+            termo in pergunta_normalizada
+            for termo in termos_estruturais
+    ):
+        campo_identificado = "Estrutural"
+
+    # ==========================================
+    # 6. ÁREAS MENCIONADAS NA PERGUNTA
+    # ==========================================
+
+    areas_possiveis = {
+        "matematica": "matematica",
+        "informatica": "informatica",
+        "geografia": "geografia",
+        "historia": "historia",
+        "biologia": "biologia",
+        "fisica": "fisica",
+        "quimica": "quimica",
+        "portugues": "portugues",
+        "lingua portuguesa": "portugues",
+        "ingles": "ingles",
+        "lingua inglesa": "ingles",
+        "espanhol": "espanhol",
+        "lingua espanhola": "espanhol"
+    }
+
+    areas_identificadas = []
+
+    for termo, area in areas_possiveis.items():
+
+        if (
+                normalizar_busca(termo)
+                in pergunta_normalizada
+        ):
+
+            if area not in areas_identificadas:
+                areas_identificadas.append(area)
+
+    # ==========================================
+    # 7. CLASSIFICA COMPONENTES POR ÁREA
+    # ==========================================
+
+    componentes_por_area = {
+        area: set()
+        for area in set(areas_possiveis.values())
+    }
+
+    chunks_conhecimentos = df_chunks[
+        df_chunks["campo"]
+        .apply(normalizar_busca)
+        == "conhecimentos"
+        ]
+
+    for _, linha in chunks_conhecimentos.iterrows():
+
+        componente = linha["Componente"]
+
+        componente_norm = normalizar_busca(
+            componente
+        )
+
+        texto_norm = normalizar_busca(
+            linha["texto"]
+        )
+
+        # --------------------------
+        # Áreas propedêuticas
+        # --------------------------
+
+        if "matematica" in componente_norm:
+            componentes_por_area[
+                "matematica"
+            ].add(componente)
+
+        if "geografia" in componente_norm:
+            componentes_por_area[
+                "geografia"
+            ].add(componente)
+
+        if "historia" in componente_norm:
+            componentes_por_area[
+                "historia"
+            ].add(componente)
+
+        if "biologia" in componente_norm:
+            componentes_por_area[
+                "biologia"
+            ].add(componente)
+
+        if "fisica" in componente_norm:
+            componentes_por_area[
+                "fisica"
+            ].add(componente)
+
+        if "quimica" in componente_norm:
+            componentes_por_area[
+                "quimica"
+            ].add(componente)
+
+        if (
+                "portugues" in componente_norm
+                or "lingua portuguesa" in componente_norm
+        ):
+            componentes_por_area[
+                "portugues"
+            ].add(componente)
+
+        if (
+                "ingles" in componente_norm
+                or "lingua inglesa" in componente_norm
+        ):
+            componentes_por_area[
+                "ingles"
+            ].add(componente)
+
+        if (
+                "espanhol" in componente_norm
+                or "espanhola" in componente_norm
+        ):
+            componentes_por_area[
+                "espanhol"
+            ].add(componente)
+
+        # --------------------------
+        # Informática
+        # --------------------------
+
+        if (
+                "/informatica" in texto_norm
+                or "informatica/" in texto_norm
+        ):
+            componentes_por_area[
+                "informatica"
+            ].add(componente)
+
+    # ==========================================
+    # 8. RERANKING NORMAL
+    # ==========================================
+
+    candidatos["bonus_componente"] = 0.0
+    candidatos["bonus_campo"] = 0.0
+
+    if componentes_identificados:
+        componentes_norm = {
+            normalizar_busca(c)
+            for c in componentes_identificados
+        }
+
+        mascara_componente = (
+            candidatos["Componente"]
+            .apply(normalizar_busca)
+            .isin(componentes_norm)
+        )
+
+        candidatos.loc[
+            mascara_componente,
+            "bonus_componente"
+        ] = 0.15
+
+    if campo_identificado is not None:
+        mascara_campo = (
+                candidatos["campo"]
+                .apply(normalizar_busca)
+                == normalizar_busca(campo_identificado)
+        )
+
+        candidatos.loc[
+            mascara_campo,
+            "bonus_campo"
+        ] = 0.10
+
+    candidatos["score_final_retrieval"] = (
+            candidatos["similaridade"]
+            + candidatos["bonus_componente"]
+            + candidatos["bonus_campo"]
+    )
+
+    candidatos = candidatos.sort_values(
+        "score_final_retrieval",
+        ascending=False
+    )
+
+    # ==========================================
+    # 9. ADICIONA CANDIDATOS INTERDISCIPLINARES
+    # ==========================================
+
+    if len(areas_identificadas) >= 2:
+
+        indices_extras = []
+
+        for area in areas_identificadas:
+
+            componentes_area = (
+                componentes_por_area.get(
+                    area,
+                    set()
+                )
+            )
+
+            if not componentes_area:
+                continue
+
+            candidatos_area = base_com_scores[
+                base_com_scores["Componente"]
+                .isin(componentes_area)
+            ].copy()
+
+            if candidatos_area.empty:
+                continue
+
+            # Se há campo explícito, usa primeiro
+            # apenas o campo solicitado.
+            if campo_identificado is not None:
+
+                candidatos_area_campo = (
+                    candidatos_area[
+                        candidatos_area["campo"]
+                        .apply(normalizar_busca)
+                        == normalizar_busca(
+                            campo_identificado
+                        )
+                        ]
+                        .copy()
+                )
+
+                if not candidatos_area_campo.empty:
+                    candidatos_area = candidatos_area_campo
+
+            candidatos_area = (
+                candidatos_area
+                .sort_values(
+                    "similaridade",
+                    ascending=False
+                )
+                .head(candidatos_por_area)
+            )
+
+            indices_extras.extend(
+                candidatos_area.index.tolist()
+            )
+
+        if indices_extras:
+
+            indices_extras = list(
+                dict.fromkeys(indices_extras)
+            )
+
+            extras = base_com_scores.loc[
+                indices_extras
+            ].copy()
+
+            extras["bonus_componente"] = 0.0
+            extras["bonus_campo"] = 0.0
+
+            if campo_identificado is not None:
+                mascara_extra_campo = (
+                        extras["campo"]
+                        .apply(normalizar_busca)
+                        == normalizar_busca(
+                    campo_identificado
+                )
+                )
+
+                extras.loc[
+                    mascara_extra_campo,
+                    "bonus_campo"
+                ] = 0.10
+
+            extras[
+                "score_final_retrieval"
+            ] = (
+                    extras["similaridade"]
+                    + extras["bonus_componente"]
+                    + extras["bonus_campo"]
+            )
+
+            candidatos = (
+                pd.concat(
+                    [
+                        candidatos,
+                        extras
+                    ]
+                )
+                .loc[
+                    lambda df:
+                    ~df.index.duplicated(
+                        keep="first"
+                    )
+                ]
+            )
+
+            candidatos = candidatos.sort_values(
+                "score_final_retrieval",
+                ascending=False
+            )
+
+    # ==========================================
+    # 10. MONTA TOP-K COM COBERTURA
+    # ==========================================
+
+    selecionados = []
+    indices_selecionados = set()
+
+    if len(areas_identificadas) >= 2:
+
+        # Primeiro garante pelo menos
+        # um resultado de cada área.
+        for area in areas_identificadas:
+
+            componentes_area = (
+                componentes_por_area.get(
+                    area,
+                    set()
+                )
+            )
+
+            if not componentes_area:
+                continue
+
+            candidatos_area = candidatos[
+                candidatos["Componente"]
+                .isin(componentes_area)
+            ]
+
+            if campo_identificado is not None:
+
+                candidatos_area_campo = (
+                    candidatos_area[
+                        candidatos_area["campo"]
+                        .apply(normalizar_busca)
+                        == normalizar_busca(
+                            campo_identificado
+                        )
+                        ]
+                )
+
+                if not candidatos_area_campo.empty:
+                    candidatos_area = (
+                        candidatos_area_campo
+                    )
+
+            if not candidatos_area.empty:
+
+                melhor = candidatos_area.iloc[0]
+
+                if (
+                        melhor.name
+                        not in indices_selecionados
+                ):
+                    selecionados.append(melhor)
+
+                    indices_selecionados.add(
+                        melhor.name
+                    )
+
+    # ==========================================
+    # 11. COMPLETA COM MELHORES SCORES
+    # ==========================================
+
+    for indice, linha in candidatos.iterrows():
+
+        if len(selecionados) >= top_k:
+            break
+
+        if indice in indices_selecionados:
+            continue
+
+        selecionados.append(
+            linha.copy()
+        )
+
+        indices_selecionados.add(
+            indice
+        )
+
+    resultados = pd.DataFrame(
+        selecionados[:top_k]
+    )
+
+    # Para perguntas de visão geral, garante que o resumo da matriz curricular
+    # entre no contexto enviado ao Gemini, mesmo se a busca semântica o ranquear baixo.
+    if pergunta_sobre_curso_como_um_todo(pergunta):
+        visao_geral = base_com_scores[
+            base_com_scores["campo"].apply(normalizar_busca) == "visao_geral_curso"
+        ]
+        if not visao_geral.empty:
+            resumo = visao_geral.iloc[0].copy()
+            resumo["bonus_componente"] = 0.0
+            resumo["bonus_campo"] = 0.0
+            resumo["score_final_retrieval"] = float(resumo["similaridade"])
+            ja_incluido = (
+                not resultados.empty and
+                (resultados["campo"].apply(normalizar_busca) == "visao_geral_curso").any()
+            )
+            if not ja_incluido:
+                resultados = pd.concat(
+                    [resumo.to_frame().T, resultados],
+                    axis=0
+                ).head(top_k)
+
+    # ==========================================
+    # 12. RANK FINAL
+    # ==========================================
+
+    resultados = resultados.copy()
+
+    resultados["rank"] = range(
+        1,
+        len(resultados) + 1
+    )
+
+    return resultados
+
+
+# =========================
+# AVALIAÇÃO
+# =========================
+
+def avaliar(df_perguntas, df_chunks, embeddings_chunks, modelo):
+    resultados_finais = []
+    logs = []
+
+    for _, pergunta_row in df_perguntas.iterrows():
+        pergunta = pergunta_row["pergunta"]
+
+        inicio = time.time()
+
+        resultados = buscar(
+            pergunta,
+            df_chunks,
+            embeddings_chunks,
+            modelo,
+            top_k=TOP_K
+        )
+
+        tempo = (time.time() - inicio) * 1000
+        componente_esperado = normalizar(pergunta_row.get("componente_esperado"))
+        campo_esperado = normalizar(pergunta_row.get("campo_esperado"))
+
+        rank_correto = None
+
+        for _, r in resultados.iterrows():
+            componente_ok = normalizar(r.get("Componente")) == componente_esperado
+            campo_ok = normalizar(r.get("campo")) == campo_esperado
+
+            if componente_ok and campo_ok:
+                rank_correto = int(r["rank"])
+                break
+
+        recall_1 = 1 if rank_correto == 1 else 0
+
+        recall_5 = 1 if (
+                rank_correto is not None
+                and 2 <= rank_correto <= 5
+        ) else 0
+
+        recall_10 = 1 if (
+                rank_correto is not None
+                and 6 <= rank_correto <= 10
+        ) else 0
+
+        mrr = 1 / rank_correto if rank_correto else 0
+
+        top1 = resultados.iloc[0]
+
+        resultados_finais.append({
+            "id": pergunta_row.get("id"),
+            "pergunta": pergunta,
+            "tipo_pergunta": pergunta_row.get("tipo_pergunta"),
+            "componente_esperado": pergunta_row.get("componente_esperado"),
+            "campo_esperado": pergunta_row.get("campo_esperado"),
+            "componente_top1": top1.get("Componente"),
+            "campo_top1": top1.get("campo"),
+            "rank_correto": rank_correto if rank_correto else "Não encontrado",
+            "recall_1": recall_1,
+            "recall_5": recall_5,
+            "recall_10": recall_10,
+            "mrr": mrr,
+            "tempo_busca_ms": tempo
+        })
+
+        for _, r in resultados.iterrows():
+            logs.append({
+                "id_pergunta": pergunta_row.get("id"),
+                "pergunta": pergunta,
+                "rank": r.get("rank"),
+                "componente": r.get("Componente"),
+                "campo": r.get("campo"),
+                "similaridade": r.get("similaridade"),
+                "score_final_retrieval": r.get("score_final_retrieval"),
+                "texto_chunkado": r.get("texto_chunkado")
+            })
+
+    return pd.DataFrame(resultados_finais), pd.DataFrame(logs)
+
+
+# =========================
+# STREAMLIT
+# =========================
+
+st.set_page_config(
+    page_title="Assistente Acadêmico",
+    page_icon="💬",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+from auth import login, register, logout, usuario_logado
+
+# =========================
+# LOGIN
+# =========================
+
+if not usuario_logado():
+
+    st.title("Login")
+
+    email = st.text_input("Email")
+    senha = st.text_input("Senha", type="password")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Entrar"):
+            ok, msg = login(email, senha)
+
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
+
+    with col2:
+        if st.button("Criar conta"):
+            ok, msg = register(email, senha)
+
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
+
+    st.stop()
+
+# =========================
+# INTERFACE
+# =========================
+
+st.markdown("""
+<style>
+
+/* ==========================================
+   SIDEBAR GERAL
+   ========================================== */
+[data-testid="stSidebar"] {
+    background-color: #17171f;
+    min-width: 360px !important;
+    width: 360px !important;
+}
+
+[data-testid="stSidebarContent"] {
+    width: 360px !important;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+/* ==========================================
+   TOPO DO ASSISTENTE
+   ========================================== */
+.topo-assistente {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 4px 6px 4px;
+    margin-bottom: 4px;
+}
+
+.topo-assistente-icone {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.topo-assistente-texto {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.topo-assistente-nome {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.topo-assistente-subtitulo {
+    margin-top: 4px;
+    font-size: 12px;
+    opacity: 0.55;
+}
+
+/* ==========================================
+   MODO
+   ========================================== */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] {
+    margin-top: 8px;
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+    min-height: 40px !important;
+    background: #0f1016 !important;
+    border: none !important;
+    padding: 0 8px !important;
+    border-radius: 8px !important;
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] span {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+}
+
+/* ==========================================
+   BOTÕES NORMAIS
+   ========================================== */
+[data-testid="stSidebar"] .stButton > button {
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 9px;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    transition: background-color 0.15s ease;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    background-color: rgba(255,255,255,0.07);
+}
+
+[data-testid="stSidebar"] .stButton > button p {
+    text-align: left !important;
+    width: 100% !important;
+    margin: 0 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+[data-testid="stSidebar"] .stButton > button > div {
+    width: 100% !important;
+    justify-content: flex-start !important;
+}
+
+/* ==========================================
+   NOVA CONVERSA
+   ========================================== */
+[data-testid="stSidebar"] button[kind="primary"] {
+    background-color: #6d46d9 !important;
+    border: none !important;
+    border-radius: 8px !important;
+    min-height: 42px !important;
+    justify-content: center !important;
+}
+
+[data-testid="stSidebar"] button[kind="primary"] p {
+    text-align: center !important;
+    font-weight: 500;
+}
+
+/* ==========================================
+   CONVERSAS
+   ========================================== */
+[class*="st-key-convrow_"] {
+    border-radius: 8px;
+    padding: 1px 2px;
+    margin-bottom: -4px;
+}
+
+[class*="st-key-convrow_"]:hover {
+    background-color: rgba(255,255,255,0.05);
+}
+
+[class*="st-key-convrow_"] .stButton > button {
+    justify-content: flex-start !important;
+    text-align: left !important;
+    padding-left: 6px !important;
+}
+
+[class*="st-key-convrow_"] .stButton > button p {
+    text-align: left !important;
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+/* ==========================================
+   MENU DA CONVERSA
+   ========================================== */
+[class*="st-key-convrow_"] [data-testid="stPopover"] button {
+    opacity: 0;
+    background: transparent !important;
+    border: none !important;
+    padding: 4px !important;
+    min-width: 24px !important;
+    transition: opacity 0.15s ease;
+}
+
+[class*="st-key-convrow_"]:hover [data-testid="stPopover"] button {
+    opacity: 1;
+}
+
+/* ==========================================
+   USUÁRIO E SAIR FIXOS NO RODAPÉ
+   ========================================== */
+
+.usuario-fixo {
+    position: fixed;
+    bottom: 48px;
+    left: 16px;
+
+    width: 328px;
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 8px 4px;
+
+    background: #17171f;
+
+    z-index: 1000;
+}
+
+.usuario-icone {
+    width: 34px;
+    height: 34px;
+
+    border-radius: 50%;
+
+    background: #2b2b35;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    font-size: 16px;
+}
+
+.usuario-email {
+    font-size: 12px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+
+/* BOTÃO SAIR */
+
+[data-testid="stSidebar"] [class*="st-key-botao_sair"] {
+    position: fixed;
+
+    bottom: 8px;
+    left: 16px;
+
+    width: 328px;
+
+    z-index: 1001;
+}
+
+[data-testid="stSidebar"] [class*="st-key-botao_sair"] button {
+    justify-content: flex-start !important;
+    text-align: left !important;
+    padding-left: 9px !important;
+}
+
+/* ==========================================
+   CABEÇALHO DO CHAT
+   ========================================== */
+
+.cabecalho-chat {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    font-size: 30px;
+    font-weight: 600;
+
+    margin-top: -20px;
+    margin-bottom: 35px;
+}
+
+/* ==========================================
+   MENSAGEM DO USUÁRIO
+   ========================================== */
+
+.mensagem-usuario-container {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    margin: 12px 0 20px 0;
+}
+
+.mensagem-usuario {
+    display: inline-block;
+    width: fit-content;
+    max-width: 65%;
+
+    padding: 16px 22px;
+    border-radius: 12px;
+
+    background: rgba(255, 255, 255, 0.06);
+
+    font-size: 16px;
+    line-height: 1.5;
+
+    word-wrap: break-word;
+}
+
+/* ==========================================
+   MENSAGEM DO ASSISTENTE
+   ========================================== */
+
+/* Container da mensagem do assistente */
+[data-testid="stChatMessage"] {
+    background: transparent !important;
+}
+
+/* Área onde fica o conteúdo da resposta */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
+    background: rgba(255, 255, 255, 0.045) !important;
+
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+
+    width: fit-content !important;
+    max-width: 85% !important;
+}
+
+/* Remove margem extra dos parágrafos */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p {
+    margin: 0 !important;
+}
+
+/* ==========================================
+   CAMPO DE PERGUNTA
+   ========================================== */
+
+/* Caixa completa */
+[data-testid="stChatInput"] {
+    border-radius: 16px !important;
+}
+
+/* Área interna */
+[data-testid="stChatInput"] > div {
+    border-radius: 16px !important;
+}
+
+/* Campo de texto */
+[data-testid="stChatInput"] textarea {
+    height: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+
+    padding: 10px 16px !important;
+
+    font-size: 14px !important;
+
+    overflow-y: auto !important;
+    resize: none !important;
+}
+
+/* Container do textarea */
+[data-testid="stChatInput"] [data-baseweb="textarea"] {
+    min-height: 0 !important;
+    height: auto !important;
+}
+
+/* Botão enviar */
+[data-testid="stChatInput"] button {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+
+    border-radius: 50% !important;
+
+    background-color: #9B7AE8 !important;
+    border: none !important;
+
+    margin-right: 8px !important;
+    align-self: center !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Hover do botão */
+[data-testid="stChatInput"] button:hover {
+    background-color: #AA8DF0 !important;
+}
+
+/* Contorno roxo ao digitar */
+[data-testid="stChatInput"]:focus-within {
+    border-color: #9B7AE8 !important;
+    box-shadow: 0 0 0 1px #9B7AE8 !important;
+}
+
+[data-testid="stChatInput"]:focus-within > div {
+    border-color: #9B7AE8 !important;
+    box-shadow: none !important;
+}
+
+
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# LOGIN
+# =========================
+
+from auth import login, register, logout, usuario_logado
+
+if not usuario_logado():
+    st.title("Login")
+    email = st.text_input("Email")
+    senha = st.text_input("Senha", type="password")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Entrar"):
+            ok, msg = login(email, senha)
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
+    with col2:
+        if st.button("Criar conta"):
+            ok, msg = register(email, senha)
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
+    st.stop()
+
+# =========================
+# DADOS / MODELO
+# =========================
+
+df_disciplinas = carregar_disciplinas()
+modelo = carregar_modelo()
+
+# =========================
+# NAVEGAÇÃO PRINCIPAL
+# =========================
+
+opcoes_modo = {
+    "Chatbot Acadêmico": "Chatbot interativo",
+    "Avaliação do RAG": "Experimento com arquivo de perguntas",
+    "Comparar estratégias": "Comparar estratégias de chunking"
+}
+
+st.sidebar.markdown(
+    """
+    <div class="topo-assistente">
+        <div class="topo-assistente-icone">🤖</div>
+        <div class="topo-assistente-texto">
+            <div class="topo-assistente-nome">Assistente Acadêmico</div>
+            <div class="topo-assistente-subtitulo">IFSP</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+modo_visual = st.sidebar.selectbox(
+    "Modo",
+    list(opcoes_modo.keys()),
+    index=0,
+    label_visibility="collapsed",
+    key="modo_principal"
+)
+
+modo_uso = opcoes_modo[modo_visual]
+
+# Parâmetros padrão usados pelo Chatbot Acadêmico
+estrategia = "recursivo"
+chunk_size = 700
+overlap = 120
+
+# ==========================================
+# PARÂMETROS DE CHUNKING
+# ==========================================
+
+# Só aparecem nos modos de avaliação.
+# No Chatbot Acadêmico eles ficam ocultos.
+
+if modo_uso == "Experimento com arquivo de perguntas":
+
+    estrategia = st.sidebar.selectbox(
+        "Estratégia de chunking",
+        ["recursivo", "fixo", "semântico"]
+    )
+
+    chunk_size = st.sidebar.slider(
+        "Tamanho do chunk",
+        200,
+        1500,
+        700,
+        100
+    )
+
+    overlap = st.sidebar.slider(
+        "Sobreposição (Overlap)",
+        0,
+        500,
+        120,
+        50
+    )
+
+    with st.sidebar.expander("❓ O que significam esses parâmetros?"):
+        st.write("""
+        **Tamanho do chunk**
+
+        Define o tamanho máximo de cada chunk gerado a partir do documento.
+        Neste sistema, esse valor é medido em **caracteres**.
+
+        **Sobreposição**
+
+        Define quantos caracteres do final de um chunk serão repetidos
+        no início do próximo.
+
+        Isso ajuda a preservar o contexto quando uma informação fica
+        dividida entre dois chunks.
+
+        Exemplo:
+
+        Se o tamanho do chunk for 700 e a sobreposição for 120,
+        cada trecho terá até 700 caracteres, e 120 caracteres poderão
+        se repetir entre trechos consecutivos.
+        """)
+
+# ==========================================
+# RODAPÉ DA SIDEBAR
+# ==========================================
+
+email_usuario = st.session_state["user"]["email"]
+
+html_usuario = f"""
+<div class="usuario-fixo">
+<div class="usuario-icone">👤</div>
+<div class="usuario-email">{email_usuario}</div>
+</div>
+"""
+
+st.sidebar.markdown(
+    html_usuario,
+    unsafe_allow_html=True
+)
+
+if st.sidebar.button(
+    "🚪 Sair",
+    use_container_width=True,
+    key="botao_sair"
+):
+    logout()
+    st.rerun()
+
+st.sidebar.markdown("</div></div>", unsafe_allow_html=True)
+
+# =========================
+# MODO EXPERIMENTO
+# =========================
+
+
+if modo_uso == "Experimento com arquivo de perguntas":
+
+    st.subheader("📁 Importar arquivo de perguntas")
+
+    with st.expander("ℹ️ Como deve ser a planilha de perguntas?"):
+
+        st.info("""
+    A planilha deve conter:
+
+    - id
+    - pergunta
+    - componente_esperado
+    - campo_esperado
+
+    Formatos aceitos:
+    - CSV (.csv)
+    - XLSX (.xlsx)
+    - XLS (.xls)
+    """)
+
+        exemplo = pd.DataFrame({
+            "id": [1, 2],
+            "pergunta": [
+                "Qual é a ementa de Algoritmos?",
+                "Quais são os objetivos de Inteligência Artificial?"
+            ],
+            "tipo_pergunta": [
+                "ementa",
+                "objetivos"
+            ],
+            "componente_esperado": [
+                "Algoritmos",
+                "Inteligência Artificial"
+            ],
+            "campo_esperado": [
+                "Ementa",
+                "Objetivos"
+            ]
+        })
+
+        st.dataframe(exemplo)
+    arquivo_perguntas = st.file_uploader(
+        "Envie um arquivo de perguntas",
+        type=["csv", "xlsx", "xls"]
+    )
+
+    df_perguntas = None
+
+    if arquivo_perguntas is not None:
+
+        extensao = arquivo_perguntas.name.split(".")[-1].lower()
+
+        if extensao == "csv":
+            df_perguntas = pd.read_csv(arquivo_perguntas)
+
+        elif extensao in ["xlsx", "xls"]:
+            df_perguntas = pd.read_excel(arquivo_perguntas)
+
+        else:
+            st.error("Formato não suportado.")
+            df_perguntas = None
+
+        if df_perguntas is not None:
+            df_perguntas = validar_perguntas(df_perguntas)
+
+    if df_perguntas is not None:
+        st.metric("Perguntas carregadas", len(df_perguntas))
+
+        with st.expander("Ver perguntas importadas"):
+            st.dataframe(df_perguntas)
+
+        if st.button("Rodar experimento"):
+            with st.spinner("Gerando chunks..."):
+                df_chunks = gerar_chunks(
+                    df_disciplinas,
+                    estrategia,
+                    chunk_size,
+                    overlap
+                )
+
+            with st.spinner("Gerando embeddings..."):
+                embeddings_chunks = modelo.encode(
+                    [f"passage: {t}" for t in df_chunks["texto"].tolist()],
+                    normalize_embeddings=True,
+                    show_progress_bar=False
+                )
+
+            with st.spinner("Avaliando perguntas..."):
+                df_resultados, df_logs = avaliar(
+                    df_perguntas,
+                    df_chunks,
+                    embeddings_chunks,
+                    modelo
+                )
+
+            recall_1 = df_resultados["recall_1"].mean()
+            recall_5 = df_resultados["recall_5"].mean()
+            recall_10 = df_resultados["recall_10"].mean()
+            mrr = df_resultados["mrr"].mean()
+            tempo_medio = df_resultados["tempo_busca_ms"].mean()
+
+            resumo = pd.DataFrame([{
+                "estrategia": estrategia,
+                "chunk_size": chunk_size,
+                "overlap": overlap,
+                "top_k": TOP_K,
+                "total_chunks": len(df_chunks),
+                "recall_1": recall_1,
+                "recall_5": recall_5,
+                "recall_10": recall_10,
+                "mrr": mrr,
+                "tempo_medio_ms": tempo_medio,
+                "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }])
+
+            resumo_tipo = df_resultados.groupby("tipo_pergunta")[
+                ["recall_1", "recall_5", "recall_10", "mrr", "tempo_busca_ms"]
+            ].mean().reset_index()
+
+            resumo_tipo["tempo_busca_ms"] = resumo_tipo["tempo_busca_ms"].round(2)
+
+            st.session_state.df_resultados = df_resultados
+            st.session_state.df_logs = df_logs
+            st.session_state.df_chunks = df_chunks
+            st.session_state.resumo = resumo
+            st.session_state.resumo_tipo = resumo_tipo
+
+            st.success("Experimento finalizado!")
+
+    if "df_resultados" in st.session_state:
+
+        df_resultados = st.session_state.df_resultados
+        df_logs = st.session_state.df_logs
+        df_chunks = st.session_state.df_chunks
+        resumo = st.session_state.resumo
+        resumo_tipo = st.session_state.resumo_tipo
+
+        recall_1 = resumo.loc[0, "recall_1"]
+        recall_5 = resumo.loc[0, "recall_5"]
+        recall_10 = resumo.loc[0, "recall_10"]
+        mrr = resumo.loc[0, "mrr"]
+        tempo_medio = resumo.loc[0, "tempo_medio_ms"]
+
+        st.subheader("🎯 Percentual de Acerto das Respostas")
+        st.caption(
+            "Desempenho da estratégia de chunking na recuperação das respostas esperadas."
+        )
+
+        c1, c2, c3, c4, c5 = st.columns(5)
+
+        c1.metric(
+            "Recall@1 ",
+            f"{recall_1:.2%}",
+            help="Percentual de perguntas em que a resposta correta apareceu exatamente na 1ª posição."
+        )
+
+        c2.metric(
+            "Recall@5 ",
+            f"{recall_5:.2%}",
+            help="Percentual de perguntas em que a resposta correta apareceu entre a 2ª e a 5ª posição."
+        )
+
+        c3.metric(
+            "Recall@10 ",
+            f"{recall_10:.2%}",
+            help="Percentual de perguntas em que a resposta correta apareceu entre a 6ª e a 10ª posição."
+        )
+
+        c4.metric(
+            "MRR ",
+            f"{mrr:.3f}",
+            help="Mede a posição em que a resposta correta apareceu. Quanto mais próximo de 1, melhor."
+        )
+
+        c5.metric(
+            "Tempo médio ",
+            f"{tempo_medio:.2f} ms",
+            help="Tempo médio necessário para processar uma pergunta e recuperar os chunks mais relevantes."
+        )
+
+        st.subheader("📊 Desempenho Geral")
+        resumo_exibir = resumo.rename(columns={
+            "estrategia": "Estratégia",
+            "chunk_size": "Tamanho do Chunk",
+            "overlap": "Sobreposição",
+            "top_k": "Top-K",
+            "total_chunks": "Quantidade de Chunks",
+            "recall_1": "Recall@1",
+            "recall_5": "Recall@5",
+            "recall_10": "Recall@10",
+            "mrr": "MRR",
+            "tempo_medio_ms": "Tempo Médio de Busca (ms)",
+            "data": "Data do Experimento"
+        })
+
+        st.dataframe(resumo_exibir)
+
+        if st.button("📊 Gerar gráfico do desempenho geral"):
+            grafico_resumo = pd.DataFrame({
+                "Métrica": ["Recall@1", "Recall@5", "Recall@10", "MRR"],
+                "Valor": [recall_1, recall_5, recall_10, mrr]
+            })
+
+            grafico_barra_altair(
+                grafico_resumo,
+                "Métrica",
+                "Valor",
+                "Resumo geral das métricas",
+                "Valor da métrica",
+                escala_0_1=True
+            )
+
+        col_resumo, col_resumo_help = st.columns([0.92, 0.08])
+
+        with col_resumo:
+            st.subheader("📋 Desempenho por Categoria de Pergunta")
+
+        with col_resumo_help:
+            with st.popover("❔"):
+                st.write("""
+Agrupa os resultados por categoria de pergunta.
+
+A coluna tempo_busca_ms mostra o tempo médio, em milissegundos, necessário para recuperar os chunks de cada tipo de pergunta.
+""")
+                resumo_tipo_exibir = resumo_tipo.rename(columns={
+                    "tipo_pergunta": "Tipo da pergunta",
+                    "recall_1": "Recall@1",
+                    "recall_5": "Recall@5",
+                    "recall_10": "Recall@10",
+                    "mrr": "MRR",
+                    "tempo_busca_ms": "Tempo Médio de Busca (ms)"
+                })
+
+        st.dataframe(resumo_tipo_exibir)
+
+        if st.button("📊 Gerar gráfico do desempenho por categoria de pergunta"):
+            grafico_barras_multiplas_altair(
+                resumo_tipo,
+                "tipo_pergunta",
+                ["recall_1", "recall_5", "recall_10", "mrr"],
+                "Métricas por tipo de pergunta",
+                "Valor da métrica"
+            )
+
+        col_resultados, col_resultados_help = st.columns([0.92, 0.08])
+
+        with col_resultados:
+            st.subheader("🔍 Resultado de Cada Pergunta")
+
+        with col_resultados_help:
+            with st.popover("❔"):
+                st.write("""
+Mostra o desempenho do sistema para cada pergunta individualmente.
+
+Permite verificar o componente esperado, o campo esperado, o resultado retornado em primeiro lugar, o rank correto e o tempo de busca.
+
+O campo 'Rank Correto' mostra em qual posição o chunk correto apareceu no ranking de resultados.
+
+O campo 'Melhor disciplina encontrada' mostra qual disciplina foi recuperada na primeira posição do ranking para a pergunta realizada.
+
+O campo campo_top1 mostra qual campo textual foi recuperado em primeiro lugar.
+""")
+                df_resultados_exibir = df_resultados.rename(columns={
+                    "componente_top1": "Melhor disciplina encontrada",
+                    "campo_top1": "Melhor campo encontrado",
+                    "rank_correto": "Posição da resposta correta",
+                    "tempo_busca_ms": "Tempo de busca (ms)",
+                    "componente_esperado": "Disciplina esperada",
+                    "campo_esperado": "Campo esperado",
+                    "tipo_pergunta": "Categoria da pergunta",
+                    "recall_1": "Recall@1",
+                    "recall_5": "Recall@5",
+                    "recall_10": "Recall@10",
+                    "mrr": "MRR"
+                })
+
+        st.dataframe(df_resultados_exibir)
+
+        if st.button("📊 Gerar gráfico dos resultado de cada pergunta"):
+            graf = df_resultados.copy()
+
+            graf["id"] = graf["id"].astype(str)
+
+            graf["rank_correto"] = graf["rank_correto"].replace(
+                "Não encontrado",
+                0
+            )
+
+            graf["rank_correto"] = pd.to_numeric(
+                graf["rank_correto"],
+                errors="coerce"
+            ).fillna(0)
+
+            grafico_barra_altair(
+                graf,
+                "id",
+                "rank_correto",
+                "Rank correto por pergunta",
+                "Posição da resposta correta",
+                eixo_x="Perguntas",
+                escala_0_1=False
+            )
+
+            grafico_barra_altair(
+                graf,
+                "id",
+                "tempo_busca_ms",
+                "Tempo de busca por pergunta",
+                "Tempo de busca (ms)",
+                eixo_x="Perguntas",
+                escala_0_1=False
+            )
+
+        col_logs, col_logs_help = st.columns([0.92, 0.08])
+
+        with col_logs:
+            st.subheader("📚 Resultados Recuperados pelo Sistema")
+
+        with col_logs_help:
+            with st.popover("❔"):
+                st.write("""
+Logs Top-K registra os K resultados mais relevantes recuperados para cada pergunta.
+
+Neste experimento, Top-K = 10.
+""")
+                df_logs_exibir = df_logs.rename(columns={
+                    "similaridade": "Similaridade semântica",
+                    "score_final_retrieval": "Pontuação final",
+                    "rank": "Rank",
+                    "componente": "Componente",
+                    "campo": "Campo",
+                    "texto_chunkado": "Trecho recuperado"
+
+                })
+
+        st.dataframe(df_logs_exibir)
+        col_comp, col_comp_help = st.columns([0.92, 0.08])
+
+        with col_comp:
+            st.markdown("**Similaridade**")
+
+        with col_comp_help:
+            with st.popover("❔"):
+                st.write("""
+        Representa o grau de proximidade semântica entre a pergunta e o chunk recuperado.
+
+Quanto maior o valor, mais parecido semanticamente o modelo considerou o texto.
+        """)
+
+        col_score, col_score_help = st.columns([0.92, 0.08])
+
+        with col_score:
+            st.markdown("**Score Final Retrieval**")
+
+        with col_score_help:
+            with st.popover("❔"):
+                st.write("""
+        Pontuação final utilizada para ordenar os resultados recuperados.
+
+        No experimento atual, ela corresponde à similaridade semântica calculada pelos embeddings.
+        """)
+        if st.button("📊 Gerar gráfico dos Resultados Recuperados pelo Sistema"):
+            sim_rank = (
+                df_logs.groupby("rank")["similaridade"]
+                .mean()
+                .reset_index()
+            )
+
+            campo_logs = (
+                df_logs["campo"]
+                .value_counts()
+                .reset_index()
+            )
+
+            campo_logs.columns = [
+                "campo",
+                "quantidade"
+            ]
+
+            # ======================================
+            # QUALIDADE DOS RESULTADOS POR POSIÇÃO
+            # ======================================
+
+            sim_rank = (
+                df_logs.groupby("rank")["similaridade"]
+                .mean()
+                .reset_index()
+            )
+
+            sim_rank["rank"] = sim_rank["rank"].astype(int).astype(str)
+
+            chart_sim = alt.Chart(sim_rank).mark_line(point=True).encode(
+                x=alt.X(
+                    "rank:N",
+                    sort=[
+                        "1", "2", "3", "4", "5",
+                        "6", "7", "8", "9", "10"
+                    ],
+                    axis=alt.Axis(
+                        title="Posição do resultado",
+                        labelAngle=0
+                    )
+                ),
+                y=alt.Y(
+                    "similaridade:Q",
+                    scale=alt.Scale(domain=[0, 1]),
+                    axis=alt.Axis(
+                        title="Similaridade média"
+                    )
+                ),
+                tooltip=[
+                    alt.Tooltip("rank:N", title="Posição"),
+                    alt.Tooltip("similaridade:Q", title="Similaridade média")
+                ]
+            ).properties(
+                title="Qualidade dos resultados por posição",
+                height=380
+            )
+
+            st.altair_chart(chart_sim, use_container_width=True)
+            st.info("""
+            📖 Interpretação
+
+            Este gráfico mostra a qualidade média dos resultados encontrados pelo sistema.
+
+            🔹 Similaridade média: indica o quanto os resultados encontrados se relacionam com a pergunta realizada. Valores mais próximos de 1 representam resultados mais relevantes.
+
+            O ideal é que os primeiros resultados apresentem valores maiores e que a linha diminua gradualmente ao longo das posições. Isso indica que os resultados mais relevantes estão aparecendo primeiro para o usuário.
+            """)
+
+            primeiro = sim_rank["similaridade"].iloc[0]
+            ultimo = sim_rank["similaridade"].iloc[-1]
+
+            if primeiro > ultimo:
+                st.success(
+                    "✅ Os resultados mais relevantes estão aparecendo nas primeiras posições do ranking."
+                )
+            else:
+                st.warning(
+                    "⚠️ O sistema não está diferenciando bem a relevância dos resultados."
+                )
+
+            # ======================================
+            # QUANTIDADE DE TRECHOS POR CAMPO
+            # ======================================
+
+            grafico_barra_altair(
+                campo_logs,
+                "campo",
+                "quantidade",
+                "Quantidade de chunks recuperados por campo",
+                "Quantidade de chunks",
+                escala_0_1=False
+            )
+
+        st.subheader("Chunks gerados")
+        st.dataframe(df_chunks)
+
+        nome_arquivo = f"resultado_{resumo.loc[0, 'estrategia']}_{resumo.loc[0, 'chunk_size']}_{resumo.loc[0, 'overlap']}.xlsx"
+
+        with pd.ExcelWriter(nome_arquivo) as writer:
+            resumo.to_excel(
+                writer,
+                sheet_name="Desempenho_Geral",
+                index=False
+            )
+
+            resumo_tipo.to_excel(
+                writer,
+                sheet_name="Desempenho_Categoria",
+                index=False
+            )
+
+            df_resultados.to_excel(
+                writer,
+                sheet_name="Resultados_Perguntas",
+                index=False
+            )
+
+            df_logs.to_excel(
+                writer,
+                sheet_name="Resultados_Recuperados",
+                index=False
+            )
+
+            df_chunks.to_excel(
+                writer,
+                sheet_name="Trechos_Gerados",
+                index=False
+            )
+
+        with open(nome_arquivo, "rb") as file:
+            st.download_button(
+                "Baixar Excel do experimento",
+                file,
+                file_name=nome_arquivo,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+# =========================
+# MODO COMPARAÇÃO
+# =========================
+
+if modo_uso == "Comparar estratégias de chunking":
+
+    st.subheader("⚖️ Comparar Estratégias de Chunking")
+
+    st.info("""
+Neste modo, você pode comparar duas ou três estratégias de chunking usando a mesma planilha de perguntas.
+
+O sistema executa cada técnica separadamente e gera uma tabela comparativa com os principais resultados quantitativos.
+""")
+
+    with st.expander("ℹ️ Como deve ser a planilha de perguntas?"):
+
+        st.info("""
+A planilha deve conter obrigatoriamente:
+
+- id
+- pergunta
+- tipo_pergunta
+- componente_esperado
+- campo_esperado
+
+Formatos aceitos:
+- CSV (.csv)
+- XLSX (.xlsx)
+- XLS (.xls)
+""")
+
+        exemplo = pd.DataFrame({
+            "id": [1, 2],
+            "pergunta": [
+                "Qual é a ementa de Algoritmos?",
+                "Quais são os objetivos de Inteligência Artificial?"
+            ],
+            "tipo_pergunta": [
+                "ementa",
+                "objetivos"
+            ],
+            "componente_esperado": [
+                "Algoritmos",
+                "Inteligência Artificial"
+            ],
+            "campo_esperado": [
+                "Ementa",
+                "Objetivos"
+            ]
+        })
+
+        st.dataframe(exemplo)
+
+    arquivo_perguntas_comp = st.file_uploader(
+        "Envie a planilha de perguntas para comparação",
+        type=["csv", "xlsx", "xls"],
+        key="upload_comparacao"
+    )
+
+    df_perguntas_comp = None
+
+    if arquivo_perguntas_comp is not None:
+
+        extensao = arquivo_perguntas_comp.name.split(".")[-1].lower()
+
+        if extensao == "csv":
+            df_perguntas_comp = pd.read_csv(arquivo_perguntas_comp)
+
+        elif extensao in ["xlsx", "xls"]:
+            df_perguntas_comp = pd.read_excel(arquivo_perguntas_comp)
+
+        else:
+            st.error("Formato não suportado.")
+            df_perguntas_comp = None
+
+        if df_perguntas_comp is not None:
+            df_perguntas_comp = validar_perguntas(df_perguntas_comp)
+
+    estrategias_comparar = st.multiselect(
+        "Selecione as estratégias que deseja comparar",
+        ["recursivo", "fixo", "semântico"],
+        default=["recursivo", "fixo", "semântico"]
+    )
+
+    st.markdown("### Parâmetros por estratégia")
+
+    col1, col2, col3 = st.columns(3)
+
+    parametros = {}
+
+    with col1:
+        st.markdown("**Recursivo**")
+        parametros["recursivo"] = {
+            "chunk_size": st.number_input(
+                "Tamanho do chunk",
+                min_value=100,
+                max_value=2000,
+                value=700,
+                step=50,
+                key="chunk_recursivo"
+            ),
+            "overlap": st.number_input(
+                "Sobreposição (Overlap)",
+                min_value=0,
+                max_value=500,
+                value=120,
+                step=10,
+                key="overlap_recursivo"
+            )
+        }
+
+    with col2:
+        st.markdown("**Fixo**")
+        parametros["fixo"] = {
+            "chunk_size": st.number_input(
+                "Tamanho do chunk",
+                min_value=100,
+                max_value=2000,
+                value=300,
+                step=50,
+                key="chunk_fixo"
+            ),
+            "overlap": st.number_input(
+                "Sobreposição (Overlap)",
+                min_value=0,
+                max_value=500,
+                value=0,
+                step=10,
+                key="overlap_fixo"
+            )
+        }
+
+    with col3:
+        st.markdown("**Semântico**")
+        parametros["semântico"] = {
+            "chunk_size": st.number_input(
+                "Tamanho do chunk",
+                min_value=100,
+                max_value=2000,
+                value=500,
+                step=50,
+                key="chunk_semantico"
+            ),
+            "overlap": st.number_input(
+                "Sobreposição (Overlap)",
+                min_value=0,
+                max_value=500,
+                value=50,
+                step=10,
+                key="overlap_semantico"
+            )
+        }
+
+    if df_perguntas_comp is not None:
+        st.metric("Perguntas carregadas", len(df_perguntas_comp))
+
+    if (
+            df_perguntas_comp is not None
+            and len(estrategias_comparar) >= 2
+            and st.button("⚖️ Rodar comparação")
+    ):
+
+        resumos = []
+        resultados_por_estrategia = {}
+        logs_por_estrategia = {}
+        chunks_por_estrategia = {}
+
+        for est in estrategias_comparar:
+            with st.spinner(f"Rodando estratégia: {est}..."):
+                resumo_est, resultados_est, logs_est, chunks_est = rodar_experimento_comparacao(
+                    df_perguntas_comp,
+                    df_disciplinas,
+                    modelo,
+                    est,
+                    parametros[est]["chunk_size"],
+                    parametros[est]["overlap"]
+                )
+
+                resumos.append(resumo_est)
+                resultados_por_estrategia[est] = resultados_est
+                logs_por_estrategia[est] = logs_est
+                chunks_por_estrategia[est] = chunks_est
+
+        df_comparacao = pd.DataFrame(resumos)
+
+        st.session_state.df_comparacao = df_comparacao
+        st.session_state.resultados_por_estrategia = resultados_por_estrategia
+        st.session_state.logs_por_estrategia = logs_por_estrategia
+        st.session_state.chunks_por_estrategia = chunks_por_estrategia
+
+        st.success("Comparação finalizada!")
+
+    if "df_comparacao" in st.session_state:
+
+        df_comparacao = st.session_state.df_comparacao
+
+        col_comp_titulo, col_comp_help = st.columns([0.92, 0.08])
+
+        with col_comp_titulo:
+            st.subheader("📊 Comparação Quantitativa das Estratégias")
+
+        with col_comp_help:
+            with st.popover("❔"):
+                st.write("""
+        Esta tabela compara os resultados quantitativos das estratégias de chunking selecionadas.
+
+        Os valores de acerto são apresentados em porcentagens.
+
+        Campos da tabela:
+
+        - Total de trechos: quantidade de chunks gerados pela estratégia.
+        - Acertos em 1º lugar: porcentagem de perguntas em que a resposta correta apareceu na primeira posição.
+        - Acertos entre 2º e 5º: porcentagem de perguntas em que a resposta correta apareceu entre a segunda e a quinta posição.
+        - Acertos entre 6º e 10º: porcentagem de perguntas em que a resposta correta apareceu entre a sexta e a décima posição.
+        - Qualidade média da posição: corresponde ao MRR. Quanto mais próximo de 1, melhor, pois indica que as respostas corretas apareceram nas primeiras posições.
+        - Tempo médio de busca: tempo médio necessário para recuperar os resultados, em milissegundos.
+        """)
+
+        df_comparacao_exibir = df_comparacao.rename(columns={
+            "estrategia": "Estratégia",
+            "chunk_size": "Tamanho do chunk",
+            "overlap": "Sobreposição",
+            "total_chunks": "Total de chunk",
+            "acertos_1_lugar": "Acertos em 1º lugar (%)",
+            "acertos_2_5_lugar": "Acertos entre 2º e 5º (%)",
+            "acertos_6_10_lugar": "Acertos entre 6º e 10º (%)",
+            "qualidade_media_posicao": "Qualidade média da posição",
+            "tempo_medio_busca_ms": "Tempo médio de busca (ms)"
+        })
+
+        for col in [
+            "Acertos em 1º lugar (%)",
+            "Acertos entre 2º e 5º (%)",
+            "Acertos entre 6º e 10º (%)"
+        ]:
+            df_comparacao_exibir[col] = (
+                                                df_comparacao_exibir[col] * 100
+                                        ).round(1).astype(str) + "%"
+
+        df_comparacao_exibir["Qualidade média da posição"] = (
+            df_comparacao_exibir["Qualidade média da posição"].round(4)
+        )
+
+        df_comparacao_exibir["Tempo médio de busca (ms)"] = (
+            df_comparacao_exibir["Tempo médio de busca (ms)"].round(2)
+        )
+
+        st.dataframe(df_comparacao_exibir)
+
+        st.subheader("Resultado da comparação")
+
+        melhor_mrr = df_comparacao.loc[
+            df_comparacao["qualidade_media_posicao"].idxmax()
+        ]
+
+        melhor_tempo = df_comparacao.loc[
+            df_comparacao["tempo_medio_busca_ms"].idxmin()
+        ]
+
+        maior_recall = df_comparacao["acertos_1_lugar"].max()
+
+        melhores_recall = df_comparacao[
+            df_comparacao["acertos_1_lugar"] == maior_recall
+            ]
+
+        nomes_melhores_recall = ", ".join(
+            melhores_recall["estrategia"].str.capitalize()
+        )
+
+        ranking_mrr = df_comparacao.sort_values(
+            "qualidade_media_posicao",
+            ascending=False
+        )
+
+        ranking_tempo = df_comparacao.sort_values(
+            "tempo_medio_busca_ms",
+            ascending=True
+        )
+
+        ranking_recall = df_comparacao.sort_values(
+            "acertos_1_lugar",
+            ascending=False
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.success(
+                f"""
+        🏆 Melhor qualidade
+
+        **{melhor_mrr['estrategia'].capitalize()}**
+
+        MRR: {melhor_mrr['qualidade_media_posicao']:.4f}
+        """
+            )
+
+            st.caption(
+                "Outras estratégias: " +
+                " | ".join(
+                    [
+                        f"{row['estrategia'].capitalize()}: {row['qualidade_media_posicao']:.4f}"
+                        for _, row in ranking_mrr.iterrows()
+                        if row["estrategia"] != melhor_mrr["estrategia"]
+                    ]
+                )
+            )
+
+        with col2:
+            st.info(
+                f"""
+        ⚡ Mais rápida
+
+        **{melhor_tempo['estrategia'].capitalize()}**
+
+        {melhor_tempo['tempo_medio_busca_ms']:.2f} ms
+        """
+            )
+
+            st.caption(
+                "Outras estratégias: " +
+                " | ".join(
+                    [
+                        f"{row['estrategia'].capitalize()}: {row['tempo_medio_busca_ms']:.2f} ms"
+                        for _, row in ranking_tempo.iterrows()
+                        if row["estrategia"] != melhor_tempo["estrategia"]
+                    ]
+                )
+            )
+
+        with col3:
+
+            maior_recall = df_comparacao["acertos_1_lugar"].max()
+
+            melhores_recall = df_comparacao[
+                df_comparacao["acertos_1_lugar"] == maior_recall
+                ]
+
+            nomes_melhores_recall = ", ".join(
+                melhores_recall["estrategia"].str.capitalize()
+            )
+
+            outras_recall = df_comparacao[
+                df_comparacao["acertos_1_lugar"] != maior_recall
+                ].sort_values(
+                "acertos_1_lugar",
+                ascending=False
+            )
+
+            st.warning(
+                f"""
+        🎯 Mais acertos em 1º lugar
+
+        **{nomes_melhores_recall}**
+
+        {maior_recall * 100:.2f}%
+        """
+            )
+
+            if not outras_recall.empty:
+                st.caption(
+                    "Outras estratégias: " +
+                    " | ".join(
+                        [
+                            f"{row['estrategia'].capitalize()}: {row['acertos_1_lugar'] * 100:.2f}%"
+                            for _, row in outras_recall.iterrows()
+                        ]
+                    )
+                )
+            else:
+                st.caption(
+                    "Todas as estratégias apresentaram o mesmo resultado nesta categoria."
+                )
+        if st.button("📊 Gerar gráfico comparativo"):
+            df_grafico = df_comparacao.copy()
+
+            grafico_barras_multiplas_altair(
+                df_grafico,
+                "estrategia",
+                [
+                    "acertos_1_lugar",
+                    "acertos_2_5_lugar",
+                    "acertos_6_10_lugar",
+                    "qualidade_media_posicao"
+                ],
+                "Comparação de desempenho entre estratégias",
+                "Valor da métrica"
+            )
+
+            grafico_barra_altair(
+                df_grafico,
+                "estrategia",
+                "tempo_medio_busca_ms",
+                "Tempo médio de busca por estratégia",
+                "Tempo médio de busca (ms)",
+                escala_0_1=False
+            )
+
+            grafico_barra_altair(
+                df_grafico,
+                "estrategia",
+                "total_chunks",
+                "Quantidade de chunks gerados por estratégia",
+                "Total de chunks",
+                escala_0_1=False
+            )
+
+        st.subheader("📁 Exportar comparação")
+
+        nome_arquivo_comp = f"comparacao_estrategias_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+        with pd.ExcelWriter(nome_arquivo_comp) as writer:
+
+            df_comparacao_exibir.to_excel(
+                writer,
+                sheet_name="Comparacao_Geral",
+                index=False
+            )
+
+            for est, df_res in st.session_state.resultados_por_estrategia.items():
+                df_res.to_excel(
+                    writer,
+                    sheet_name=f"Resultados_{est}"[:31],
+                    index=False
+                )
+
+            for est, df_logs in st.session_state.logs_por_estrategia.items():
+                df_logs.to_excel(
+                    writer,
+                    sheet_name=f"Recuperados_{est}"[:31],
+                    index=False
+                )
+
+        with open(nome_arquivo_comp, "rb") as file:
+            st.download_button(
+                "Baixar Excel da comparação",
+                file,
+                file_name=nome_arquivo_comp,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+    elif df_perguntas_comp is not None and len(estrategias_comparar) < 2:
+        st.warning("Selecione pelo menos duas estratégias para comparar.")
+
+# =========================
+# MODO CHATBOT
+# =========================
+
+if modo_uso == "Chatbot interativo":
+
+    from firestore import (
+        listar_conversas,
+        criar_conversa,
+        listar_mensagens,
+        atualizar_titulo_conversa,
+        salvar_mensagem,
+        excluir_conversa,
+        verificar_rate_limit
+    )
+
+    from llm import gerar_resposta, reescrever_pergunta
+    from firebase_config import db
+
+    user = st.session_state["user"]
+
+    st.markdown(
+        """
+        <div class="cabecalho-chat">
+            <span>Chatbot Acadêmico</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # =========================
+    # NOVA CONVERSA
+    # =========================
+
+    if st.sidebar.button(
+            "➕ Nova conversa",
+            type="primary",
+            use_container_width=True,
+            key="nova_conversa"
+    ):
+        conversation_id = criar_conversa(user["uid"])
+        st.session_state["conversation_id"] = conversation_id
+        st.session_state.pop("select_conversas", None)
+        st.rerun()
+
+    # =========================
+    # LISTA DE CONVERSAS
+    # =========================
+
+    conversas = listar_conversas(user["uid"])
+
+    if not conversas:
+        conversation_id = criar_conversa(user["uid"])
+        st.session_state["conversation_id"] = conversation_id
+        st.rerun()
+
+    conversas = listar_conversas(user["uid"])
+
+    if "conversation_id" not in st.session_state or not any(
+            c["id"] == st.session_state["conversation_id"] for c in conversas
+    ):
+        st.session_state["conversation_id"] = conversas[0]["id"]
+
+    st.sidebar.markdown("### Conversas")
+
+    # Cada conversa ocupa uma linha; o menu aparece somente no hover.
+    for conversa_item in conversas:
+
+        conversa_id = conversa_item["id"]
+        titulo = conversa_item["title"]
+
+        titulo_exibido = titulo
+        if len(titulo_exibido) > 32:
+            titulo_exibido = titulo_exibido[:29] + "..."
+
+        with st.sidebar.container(key=f"convrow_{conversa_id}"):
+            col_conversa, col_menu = st.columns([0.88, 0.12], gap="small")
+
+            with col_conversa:
+                if st.button(
+                        titulo_exibido,
+                        key=f"conversa_{conversa_id}",
+                        use_container_width=True
+                ):
+                    st.session_state["conversation_id"] = conversa_id
+                    st.rerun()
+
+            with col_menu:
+                with st.popover("⋯", use_container_width=True):
+                    if st.download_button(
+                            "⬇️ Exportar",
+                            data=gerar_exportacao_conversa(
+                                titulo,
+                                listar_mensagens(user["uid"], conversa_id)
+                            ),
+                            file_name=nome_arquivo_conversa(titulo),
+                            mime="text/markdown",
+                            use_container_width=True,
+                            key=f"exportar_{conversa_id}"
+                    ):
+                        pass
+
+                    st.divider()
+
+                    if st.button(
+                            "🗑️ Excluir",
+                            key=f"excluir_{conversa_id}",
+                            use_container_width=True
+                    ):
+                        excluir_conversa(user["uid"], conversa_id)
+                        if st.session_state.get("conversation_id") == conversa_id:
+                            st.session_state.pop("conversation_id", None)
+                            st.session_state.pop("select_conversas", None)
+                        st.rerun()
+
+    # =========================
+    # CONVERSA ATUAL
+    # =========================
+
+    conversa_selecionada = next(
+        c for c in conversas
+        if c["id"] == st.session_state["conversation_id"]
+    )
+
+    titulo_conversa = conversa_selecionada["title"]
+
+    mensagens = listar_mensagens(
+        user["uid"],
+        st.session_state["conversation_id"]
+    )
+
+    # =========================
+    # HISTÓRICO
+    # =========================
+
+    for mensagem in mensagens:
+
+        if mensagem["role"] == "user":
+
+            st.markdown(
+                f"""
+                <div class="mensagem-usuario-container">
+                    <div class="mensagem-usuario">
+                        {mensagem["content"]}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+
+        else:
+
+            with st.chat_message("assistant", avatar="⚙️"):
+
+                st.write(mensagem["content"])
+
+                botao_copiar_resposta(mensagem["content"])
+
+                # Recupera as fontes salvas no Firebase
+
+                # fontes = mensagem.get("fontes", [])
+                #
+                # if fontes:
+                #
+                #     st.markdown("**Fontes utilizadas (Top 5)**")
+                #
+                #     for fonte in fontes:
+                #         st.markdown(
+                #
+                #             f'**{fonte["rank"]}. {fonte["componente"]}**  \n'
+                #
+                #             f'Campo: {fonte["campo"]}  \n'
+                #
+                #             f'Score: {fonte["score"]:.3f}'
+                #
+                #         )
+
+    # =========================
+    # CAMPO DA PERGUNTA
+    # =========================
+
+    pergunta_usuario = st.chat_input("Digite sua pergunta...")
+
+    if pergunta_usuario and pergunta_usuario.strip():
+
+        permitido, segundos_restantes = verificar_rate_limit(
+            user["uid"]
+        )
+
+        if not permitido:
+            st.warning(
+                f"⏳ Você enviou muitas perguntas em pouco tempo. "
+                f"Aguarde aproximadamente {segundos_restantes} segundos "
+                f"antes de tentar novamente."
+            )
+            st.stop()
+
+        historico = ""
+        for mensagem in mensagens:
+            role = mensagem["role"]
+            content = mensagem["content"]
+            if role == "user":
+                historico += f"Usuário: {content}\n"
+            elif role == "assistant":
+                historico += f"Assistente: {content}\n"
+
+        st.markdown(
+            f"""
+            <div class="mensagem-usuario-container">
+                <div class="mensagem-usuario">
+                    {pergunta_usuario}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        conversa_doc = (
+            db.collection("users")
+            .document(user["uid"])
+            .collection("conversations")
+            .document(st.session_state["conversation_id"])
+            .get()
+        )
+
+        dados = conversa_doc.to_dict()
+
+        if dados["title"] == "Nova conversa":
+            titulo = pergunta_usuario.strip()
+            if len(titulo) > 60:
+                titulo = titulo[:57] + "..."
+            atualizar_titulo_conversa(
+                user["uid"],
+                st.session_state["conversation_id"],
+                titulo
+            )
+
+        salvar_mensagem(
+            user["uid"],
+            st.session_state["conversation_id"],
+            "user",
+            pergunta_usuario
+        )
+
+        with st.spinner("Preparando base de conhecimento..."):
+            df_chunks_chat, embeddings_chunks_chat = preparar_base_chat(
+                estrategia,
+                chunk_size,
+                overlap
+            )
+
+        with st.spinner("Interpretando contexto da conversa..."):
+            if precisa_reescrever(pergunta_usuario, historico):
+                pergunta_busca = reescrever_pergunta(
+                    pergunta_usuario,
+                    historico
+                )
+            else:
+                pergunta_busca = pergunta_usuario
+
+        with st.spinner("Buscando resposta..."):
+            resultados_chat = buscar_chat(
+                pergunta_busca,
+                df_chunks_chat,
+                embeddings_chunks_chat,
+                modelo,
+                top_k=5
+            )
+
+
+
+        contexto = """
+INSTRUÇÕES DE CONTEXTO PARA O ASSISTENTE:
+- Responda com base nas informações recuperadas abaixo.
+- Para perguntas sobre o curso como um todo, sintetize informações de diferentes disciplinas e anos; não trate uma disciplina isolada como se representasse o curso inteiro.
+- Para perguntas sobre áreas de conhecimento, use as áreas, os tipos e os núcleos que estiverem explicitamente registrados no contexto. Não invente categorias ausentes.
+- Para perguntas sobre estrutura curricular, considere a distribuição por ano, os componentes, os tipos/núcleos e as cargas horárias quando esses dados estiverem disponíveis.
+- Se o contexto não trouxer dados suficientes para afirmar algo, diga claramente qual informação não está disponível.
+"""
+        for _, r in resultados_chat.iterrows():
+            contexto += f"""
+Componente/registro: {r["Componente"]}
+Campo: {r["campo"]}
+Tipo curricular: {r.get("Tipo", "Não informado")}
+Núcleo curricular: {r.get("Núcleo", "Não informado")}
+Ano/período: {r.get("Ano", "Não informado")}
+
+{r["texto_chunkado"]}
+
+-----------------------------
+"""
+
+        with st.spinner("Gerando resposta com Gemini..."):
+            resposta = gerar_resposta(
+                contexto,
+                pergunta_usuario,
+                historico
+            )
+
+
+
+
+        # Prepara as fontes recuperadas pelo RAG
+        fontes = []
+
+        for _, r in resultados_chat.iterrows():
+            fontes.append({
+                "rank": int(r["rank"]),
+                "componente": str(r["Componente"]),
+                "componente": str(r["Componente"]),
+                "campo": str(r["campo"]),
+                "similaridade": float(r["similaridade"]),
+                "score": float(r["score_final_retrieval"])
+            })
+
+        # Salva a resposta junto com as fontes utilizadas
+        salvar_mensagem(
+            user["uid"],
+            st.session_state["conversation_id"],
+            "assistant",
+            resposta,
+            fontes=fontes
+        )
+
+        st.rerun()
