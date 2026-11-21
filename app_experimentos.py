@@ -398,8 +398,7 @@ def carregar_disciplinas():
 def carregar_modelo():
     return SentenceTransformer(MODELO)
 
-
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def preparar_base_chat(estrategia, chunk_size, overlap):
 
     df_disciplinas = carregar_disciplinas()
@@ -419,7 +418,6 @@ def preparar_base_chat(estrategia, chunk_size, overlap):
     )
 
     return df_chunks, embeddings_chunks
-
 
 def validar_perguntas(df):
     colunas_obrigatorias = [
@@ -1228,7 +1226,6 @@ def avaliar(df_perguntas, df_chunks, embeddings_chunks, modelo):
         )
 
         tempo = (time.time() - inicio) * 1000
-
         componente_esperado = normalizar(pergunta_row.get("componente_esperado"))
         campo_esperado = normalizar(pergunta_row.get("campo_esperado"))
 
@@ -2968,11 +2965,33 @@ if modo_uso == "Chatbot interativo":
                 unsafe_allow_html=True
             )
 
+
         else:
 
             with st.chat_message("assistant", avatar="⚙️"):
+
                 st.write(mensagem["content"])
+
                 botao_copiar_resposta(mensagem["content"])
+
+                # Recupera as fontes salvas no Firebase
+
+                # fontes = mensagem.get("fontes", [])
+                #
+                # if fontes:
+                #
+                #     st.markdown("**Fontes utilizadas (Top 5)**")
+                #
+                #     for fonte in fontes:
+                #         st.markdown(
+                #
+                #             f'**{fonte["rank"]}. {fonte["componente"]}**  \n'
+                #
+                #             f'Campo: {fonte["campo"]}  \n'
+                #
+                #             f'Score: {fonte["score"]:.3f}'
+                #
+                #         )
 
     # =========================
     # CAMPO DA PERGUNTA
@@ -3066,19 +3085,7 @@ if modo_uso == "Chatbot interativo":
                 top_k=5
             )
 
-            fontes = []
 
-            for _, r in resultados_chat.iterrows():
-                fontes.append({
-                    "rank": int(r["rank"]),
-                    "componente": str(r["Componente"]),
-                    "campo": str(r["campo"]),
-                    "similaridade": float(r["similaridade"]),
-                    "score": float(r["score_final_retrieval"])
-                })
-
-            st.write(resultados_chat.columns.tolist())
-            st.dataframe(resultados_chat)
 
         contexto = ""
         for _, r in resultados_chat.iterrows():
@@ -3098,12 +3105,16 @@ Campo: {r["campo"]}
                 historico
             )
 
+
+
+
         # Prepara as fontes recuperadas pelo RAG
         fontes = []
 
         for _, r in resultados_chat.iterrows():
             fontes.append({
                 "rank": int(r["rank"]),
+                "componente": str(r["Componente"]),
                 "componente": str(r["Componente"]),
                 "campo": str(r["campo"]),
                 "similaridade": float(r["similaridade"]),

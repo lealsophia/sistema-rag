@@ -1544,16 +1544,197 @@ st.markdown("""
 /* ==========================================
    SIDEBAR GERAL
    ========================================== */
+
+/* ==========================================
+   SIDEBAR RESPONSIVA
+   ========================================== */
+
+/* SIDEBAR - DESKTOP */
 [data-testid="stSidebar"] {
-    background-color: #17171f;
+    background-color: #17171f !important;
     min-width: 360px !important;
     width: 360px !important;
+    max-width: 360px !important;
 }
 
 [data-testid="stSidebarContent"] {
-    width: 360px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
     padding-left: 16px;
     padding-right: 16px;
+}
+
+/* Reserva espaço para o rodapé */
+[data-testid="stSidebarUserContent"] {
+    box-sizing: border-box !important;
+    padding-bottom: 100px !important;
+}
+
+/* ==========================================
+   RODAPÉ FIXO
+   ========================================== */
+
+[data-testid="stSidebar"] .st-key-sidebar_footer {
+    position: fixed !important;
+    left: 0 !important;
+    bottom: 0 !important;
+
+    width: min(360px, 100vw) !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom)) !important;
+
+    background: #17171f !important;
+    border-top: 1px solid rgba(255,255,255,0.08);
+
+    z-index: 99999 !important;
+}
+
+/* Perfil */
+.usuario-fixo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    width: 100%;
+    min-width: 0;
+    padding: 4px 0 8px;
+    box-sizing: border-box;
+}
+
+.usuario-icone {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+
+    border-radius: 50%;
+    background: #2b2b35;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.usuario-email {
+    min-width: 0;
+    flex: 1;
+
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Botão Sair */
+[data-testid="stSidebar"] .st-key-sidebar_footer [data-testid="stButton"] {
+    width: 100%;
+}
+
+[data-testid="stSidebar"] .st-key-sidebar_footer button {
+    width: 100%;
+    min-height: 36px;
+
+    justify-content: flex-start !important;
+    text-align: left !important;
+
+    padding-left: 9px !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+[data-testid="stSidebar"] .st-key-sidebar_footer button:hover {
+    background: rgba(255,255,255,0.07) !important;
+}
+
+
+
+/* ==========================================
+   SIDEBAR - ÁREA DE ROLAGEM
+   ========================================== */
+
+[data-testid="stSidebarContent"],
+[data-testid="stSidebarUserContent"] {
+    box-sizing: border-box !important;
+    padding-bottom: 115px !important;
+}
+
+/* ==========================================
+   RODAPÉ FIXO DA SIDEBAR
+   ========================================== */
+
+[data-testid="stSidebar"] .st-key-sidebar_footer {
+    position: fixed !important;
+    left: 0 !important;
+    bottom: 0 !important;
+
+    width: min(360px, 100vw) !important;
+    box-sizing: border-box !important;
+
+    padding: 8px 16px calc(8px + env(safe-area-inset-bottom)) !important;
+
+    background: #17171f !important;
+    border-top: 1px solid rgba(255,255,255,0.08);
+
+    z-index: 9999 !important;
+}
+
+/* Perfil */
+
+[data-testid="stSidebar"] .usuario-fixo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    width: 100%;
+    min-width: 0;
+    padding: 4px 0 8px;
+    box-sizing: border-box;
+}
+
+.usuario-icone {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+
+    border-radius: 50%;
+    background: #2b2b35;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.usuario-email {
+    min-width: 0;
+    flex: 1;
+
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Botão sair */
+
+[data-testid="stSidebar"] .st-key-sidebar_footer [data-testid="stButton"] {
+    width: 100%;
+}
+
+[data-testid="stSidebar"] .st-key-sidebar_footer [data-testid="stButton"] button {
+    width: 100%;
+    min-height: 36px;
+
+    justify-content: flex-start !important;
+    text-align: left !important;
+
+    padding-left: 9px !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+[data-testid="stSidebar"] .st-key-sidebar_footer [data-testid="stButton"] button:hover {
+    background: rgba(255,255,255,0.07) !important;
 }
 
 /* ==========================================
@@ -1664,30 +1845,110 @@ st.markdown("""
     font-weight: 500;
 }
 
+
 /* ==========================================
-   CONVERSAS
+   CONVERSAS - LAYOUT COMPACTO
    ========================================== */
+
 [class*="st-key-convrow_"] {
-    border-radius: 8px;
-    padding: 1px 2px;
-    margin-bottom: -4px;
-}
-
-[class*="st-key-convrow_"]:hover {
-    background-color: rgba(255,255,255,0.05);
-}
-
-[class*="st-key-convrow_"] .stButton > button {
-    justify-content: flex-start !important;
-    text-align: left !important;
-    padding-left: 6px !important;
-}
-
-[class*="st-key-convrow_"] .stButton > button p {
-    text-align: left !important;
     width: 100% !important;
+    padding: 0 !important;
+    margin: 0 0 5px 0 !important;
+    border-radius: 8px;
+    background: transparent !important;
+}
+
+[class*="st-key-convrow_"] [data-testid="stHorizontalBlock"] {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 5px !important;
+}
+
+[class*="st-key-convrow_"] [data-testid="column"]:first-child {
+    flex: 1 1 auto !important;
+    width: 0 !important;
+    min-width: 0 !important;
+}
+
+[class*="st-key-convrow_"] [data-testid="column"]:last-child {
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+}
+
+/* Título */
+[class*="st-key-convrow_"] [data-testid="column"]:first-child button {
+    width: 100% !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 0 9px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Texto do título */
+[class*="st-key-convrow_"] [data-testid="column"]:first-child button p {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     margin: 0 !important;
 }
+
+
+/* ==========================================
+   SETINHAS DAS CONVERSAS
+   ========================================== */
+
+/* COMPUTADOR: aparecem ao passar o mouse */
+@media (min-width: 769px) {
+
+    [class*="st-key-convrow_"] [data-testid="stPopover"] button {
+        width: 34px !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        padding: 0 !important;
+        opacity: 0 !important;
+        transition: opacity 0.15s ease !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    [class*="st-key-convrow_"]:hover [data-testid="stPopover"] button {
+        opacity: 1 !important;
+    }
+}
+
+/* CELULAR: sempre visíveis */
+@media (max-width: 768px) {
+
+    [class*="st-key-convrow_"] [data-testid="stPopover"] button {
+        width: 34px !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        padding: 0 !important;
+        opacity: 1 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+}
+
+
+/* Menu Exportar e Excluir */
+[data-testid="stPopoverBody"] {
+    min-width: 180px !important;
+    padding: 12px !important;
+    border-radius: 10px !important;
+}
+
+[data-testid="stPopoverBody"] button {
+    width: 100% !important;
+    min-height: 36px !important;
+}
+
 
 /* ==========================================
    MENU DA CONVERSA
@@ -1705,72 +1966,7 @@ st.markdown("""
     opacity: 1;
 }
 
-/* ==========================================
-   USUÁRIO E SAIR FIXOS NO RODAPÉ
-   ========================================== */
 
-.usuario-fixo {
-    position: fixed;
-    bottom: 48px;
-    left: 16px;
-
-    width: 328px;
-
-    display: flex;
-    align-items: center;
-    gap: 10px;
-
-    padding: 8px 4px;
-
-    background: #17171f;
-
-    z-index: 1000;
-}
-
-.usuario-icone {
-    width: 34px;
-    height: 34px;
-
-    border-radius: 50%;
-
-    background: #2b2b35;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    flex-shrink: 0;
-
-    font-size: 16px;
-}
-
-.usuario-email {
-    font-size: 12px;
-
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-
-/* BOTÃO SAIR */
-
-[data-testid="stSidebar"] [class*="st-key-botao_sair"] {
-    position: fixed;
-
-    bottom: 8px;
-    left: 16px;
-
-    width: 328px;
-
-    z-index: 1001;
-}
-
-[data-testid="stSidebar"] [class*="st-key-botao_sair"] button {
-    justify-content: flex-start !important;
-    text-align: left !important;
-    padding-left: 9px !important;
-}
 
 /* ==========================================
    CABEÇALHO DO CHAT
@@ -1910,6 +2106,187 @@ st.markdown("""
 }
 
 
+/* ==========================================
+   RESPONSIVIDADE - CELULAR
+   ========================================== */
+
+@media screen and (max-width: 768px) {
+
+    /* Sidebar aberta */
+    [data-testid="stSidebar"][aria-expanded="true"] {
+        width: min(85vw, 320px) !important;
+        min-width: min(85vw, 320px) !important;
+        max-width: min(85vw, 320px) !important;
+        z-index: 10000 !important;
+    }
+
+    /* Sidebar recolhida */
+    [data-testid="stSidebar"][aria-expanded="false"] {
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        flex: 0 0 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* Conteúdo interno */
+    [data-testid="stSidebarContent"] {
+        width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Área principal do aplicativo */
+    [data-testid="stMain"] {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    [data-testid="stMainBlockContainer"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Título do chatbot */
+    .cabecalho-chat {
+        font-size: clamp(21px, 6vw, 30px) !important;
+        margin-top: 0 !important;
+        margin-bottom: 20px !important;
+        max-width: 100% !important;
+        overflow-wrap: anywhere;
+    }
+
+    /* Mensagens */
+    [data-testid="stChatMessage"] {
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Mensagem do usuário */
+    .mensagem-usuario {
+        max-width: 90% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Campo de digitação */
+    [data-testid="stChatInput"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    
+/* ==========================================
+   BALÕES DE CONVERSA - MOBILE
+   ========================================== */
+
+@media screen and (max-width: 768px) {
+
+    /* Aproveita toda a largura disponível */
+    [data-testid="stChatMessage"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        gap: 6px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Remove o espaço ocupado pelo avatar do assistente */
+    [data-testid="stChatMessage"] [data-testid="chatAvatarIcon"] {
+        display: none !important;
+    }
+
+    /* Conteúdo da mensagem */
+    [data-testid="stChatMessageContent"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Texto dentro dos balões */
+    [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+        overflow-wrap: break-word !important;
+    }
+
+    /* Espaçamento interno mais compacto */
+    [data-testid="stChatMessage"] p {
+        line-height: 1.5 !important;
+    }
+
+    /* Listas dentro das respostas */
+    [data-testid="stChatMessage"] ol,
+    [data-testid="stChatMessage"] ul {
+        padding-left: 20px !important;
+    }
+
+    /* Evita balões encostados nas laterais */
+    [data-testid="stChatMessage"] {
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+    }
+}
+
+/* ==========================================
+   AJUSTE FINO DOS BALÕES - MOBILE
+   ========================================== */
+
+@media screen and (max-width: 768px) {
+
+    /* Balões das mensagens */
+    [data-testid="stChatMessageContent"] {
+        width: 94% !important;
+        max-width: 94% !important;
+        flex: 0 1 94% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    /* Texto um pouco mais compacto */
+    [data-testid="stChatMessage"] p {
+        font-size: 14px !important;
+        line-height: 1.55 !important;
+    }
+
+    /* Menos espaçamento interno */
+    [data-testid="stChatMessage"] {
+        padding-top: 4px !important;
+        padding-bottom: 4px !important;
+    }
+
+    /* Listas */
+    [data-testid="stChatMessage"] ol,
+    [data-testid="stChatMessage"] ul {
+        padding-left: 18px !important;
+    }
+
+    /* Balão da pergunta do usuário */
+    .mensagem-usuario {
+        max-width: 88% !important;
+        padding: 12px 15px !important;
+    }
+}
+
+}
+
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -2039,33 +2416,37 @@ if modo_uso == "Experimento com arquivo de perguntas":
         se repetir entre trechos consecutivos.
         """)
 
+
 # ==========================================
-# RODAPÉ DA SIDEBAR
+# RODAPÉ FIXO DA SIDEBAR
 # ==========================================
 
-email_usuario = st.session_state["user"]["email"]
+from html import escape
 
-html_usuario = f"""
-<div class="usuario-fixo">
-<div class="usuario-icone">👤</div>
-<div class="usuario-email">{email_usuario}</div>
-</div>
-"""
-
-st.sidebar.markdown(
-    html_usuario,
-    unsafe_allow_html=True
+email_usuario = escape(
+    str(st.session_state["user"]["email"])
 )
 
-if st.sidebar.button(
-    "🚪 Sair",
-    use_container_width=True,
-    key="botao_sair"
-):
-    logout()
-    st.rerun()
+with st.sidebar.container(key="sidebar_footer"):
 
-st.sidebar.markdown("</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="usuario-fixo">
+            <div class="usuario-icone">👤</div>
+            <div class="usuario-email">{email_usuario}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if st.button(
+        "🚪 Sair",
+        use_container_width=True,
+        key="botao_sair"
+    ):
+        logout()
+        st.rerun()
+
 
 # =========================
 # MODO EXPERIMENTO
@@ -3103,7 +3484,7 @@ if modo_uso == "Chatbot interativo":
                     st.rerun()
 
             with col_menu:
-                with st.popover("⋯", use_container_width=True):
+                with st.popover("", use_container_width=False):
                     if st.download_button(
                             "⬇️ Exportar",
                             data=gerar_exportacao_conversa(

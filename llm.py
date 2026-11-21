@@ -1,11 +1,38 @@
-import time
-from google import genai
-from google.genai.errors import ServerError, ClientError
 
-from config import GEMINI_API_KEY
+from groq import Groq
+from config import GROQ_API_KEY
 
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+# =========================
+# CONFIGURAÇÃO GROQ
+# =========================
+
+client = Groq(api_key=GROQ_API_KEY)
+
+MODELO = "openai/gpt-oss-120b"
+
+
+# =========================
+# FUNÇÃO AUXILIAR
+# =========================
+
+def consultar_groq(prompt):
+
+    resposta = client.chat.completions.create(
+        model=MODELO,
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.2,
+        max_tokens=2048
+    )
+
+    texto = resposta.choices[0].message.content
+
+    return texto.strip() if texto else ""
 
 
 # =========================
@@ -42,42 +69,17 @@ Pergunta atual:
 {pergunta}
 """
 
-    for tentativa in range(3):
-        try:
+    try:
+        pergunta_reescrita = consultar_groq(prompt)
 
-            resposta = client.models.generate_content(
-                model="models/gemini-3.5-flash",
-                contents=prompt
-            )
+        if pergunta_reescrita:
+            return pergunta_reescrita
 
-            pergunta_reescrita = resposta.text.strip()
+        return pergunta
 
-            if pergunta_reescrita:
-                return pergunta_reescrita
-
-            return pergunta
-
-
-        except ServerError as erro:
-
-            if erro.code == 503:
-
-                if tentativa < 2:
-                    time.sleep(2 ** tentativa)
-                    continue
-
-                # Se o Gemini estiver indisponível,
-                # usa a pergunta original
-                return pergunta
-
-            raise
-
-        except ClientError as erro:
-            if erro.code == 429:
-                return pergunta
-
-            raise
-
+    except Exception as erro:
+        print("Erro ao reescrever pergunta com Groq:", erro)
+        return pergunta
 
 
 # =========================
@@ -116,42 +118,22 @@ Pergunta atual:
 {pergunta}
 """
 
-    for tentativa in range(3):
-        try:
+    try:
+        resposta = consultar_groq(prompt)
 
-            resposta = client.models.generate_content(
-                model="models/gemini-3.5-flash",
-                contents=prompt
-            )
+        print("\n===== DEBUG GROQ =====")
+        print("Resposta:", repr(resposta))
+        print("======================\n")
 
-            print("\n===== DEBUG GEMINI =====")
-            print("Resposta:", repr(resposta.text))
-            print("Resposta completa:", resposta)
-            print("========================\n")
+        if resposta:
+            return resposta
 
-            return resposta.text
+        return "Não foi possível gerar uma resposta. Tente novamente."
 
-        except ClientError as erro:
-            if erro.code == 429:
-                return (
-                    "O limite temporário de uso do modelo foi atingido. "
-                    "Tente novamente em alguns instantes."
-                )
+    except Exception as erro:
+        print("Erro ao gerar resposta com Groq:", erro)
 
-            raise
-
-        except ServerError as erro:
-
-            if erro.code == 503:
-
-                if tentativa < 2:
-                    time.sleep(2 ** tentativa)
-                    continue
-
-                return (
-                    "O modelo de linguagem está temporariamente "
-                    "indisponível devido à alta demanda. "
-                    "Tente novamente em alguns instantes."
-                )
-
-            raise
+        return (
+            "Não foi possível gerar uma resposta no momento. "
+            "Verifique a conexão com o serviço de IA e tente novamente."
+        )

@@ -239,7 +239,6 @@ def salvar_mensagem(uid, conversation_id, role, content, fontes=None):
 
 def listar_mensagens(uid, conversation_id):
 
-
     mensagens_ref = (
         db.collection("users")
         .document(uid)
@@ -258,7 +257,8 @@ def listar_mensagens(uid, conversation_id):
         mensagens.append({
             "id": doc.id,
             "role": dados.get("role"),
-            "content": dados.get("content")
+            "content": dados.get("content"),
+            "fontes": dados.get("fontes", [])
         })
 
     return mensagens
